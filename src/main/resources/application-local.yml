@@ -1,0 +1,71 @@
+spring:  # Database Configuration
+  datasource:
+    url: jdbc:mysql://ballast.proxy.rlwy.net:11831/railway
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: gNgnpukLJxwoSstPvHZdTPQylEBZHBfE
+    hikari:
+      idle-timeout: ${DATASOURCE_DB_CON_POOL_IDLE_TIMEOUT:1800000}
+      maximum-pool-size: ${DATASOURCE_MAX_CON_POOL_SIZE:4}
+      minimum-idle: ${DATASOURCE_MIN_CON_POOL_SIZE:2}
+      connection-timeout: ${DATASOURCE_DB_COONECTION_TIMEOUT:30000}
+      keepalive-time: ${DATASOURCE_DB_CON_POOL_KEEP_ALIVE_TIME:30000}
+      leak-detection-threshold: ${DATASOURCE_DB_LEAK_DETECTION_THRESHOLD:30000}
+      max-lifetime: ${DATASOURCE_DB_CON_POOL_MAX_LIFE_TIME:3600000}
+      pool-name: mcp-client-datasource-pool
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+  # Thymeleaf Configuration
+  thymeleaf:
+    cache: false
+    mode: HTML
+    encoding: UTF-8
+
+  # Spring AI Configuration
+  application:
+    name: mcp-chat-client
+  ai:
+    # Anthropic Configuration
+    anthropic:
+      api-key: "sk-update-it"
+
+    # MCP Configuration
+    mcp:
+      client:
+        sse:
+          connections:
+            my-mcp-server:
+              url: ${mcp-servers.banking-server}
+        type: async
+        request-timeout: 120s
+  threads:
+    virtual:
+      enabled: true
+
+
+mcp-servers:
+  banking-server: "http://localhost:8081"
+
+app:
+  chat:
+    max-history-size: 50
+  mcp:
+    custom-server:
+      enabled: true
+      reconnect-attempts: 3
+      reconnect-delay: 5
+
+# Server Configuration
+server:
+  tomcat:
+    max-swallow-size: -1
+  port: ${PORT:9090}
+  servlet:
+    context-path: /
+  error:
+    include-message: always
+    include-binding-errors: always
