@@ -1,15 +1,21 @@
-# Use the Eclipse temurin alpine official image
-# https://hub.docker.com/_/eclipse-temurin
-FROM eclipse-temurin:21-jdk-alpine
-
-# Create and change to the app directory.
+# Importing JDK and copying required files
+FROM openjdk:21-jdk AS build
 WORKDIR /app
+COPY pom.xml .
+COPY src src
 
-# Copy local code to the container image.
-COPY . ./
+# Copy Maven wrapper
+COPY mvnw .
+COPY .mvn .mvn
 
-# Build the app.
-RUN ./mvnw -B -DskipTests clean package
+# Set execution permission for the Maven wrapper
+RUN chmod +x ./mvnw
+RUN ./mvnw clean package -DskipTests
 
-# Run the app by dynamically finding the JAR file in the target directory
-CMD ["java","-Xms512m", "-Xmx1024m", "-jar", "target/mcp-chat-client-1.0.0.jar"]
+# Stage 2: Create the final Docker image using OpenJDK 21
+FROM openjdk:21-jdk
+VOLUME /tmp
+
+# Copy the JAR from the build stage
+COPY --from=build /app/target/*.jar app.jar
+ENTRYPOINT ["java","-jar","/app.jar"]
