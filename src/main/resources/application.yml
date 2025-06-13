@@ -28,6 +28,9 @@ spring:  # Database Configuration
 # Spring AI Configuration
   application:
     name: mcp-chat-client
+  main:
+    web-application-type: reactive
+    banner-mode: log
   ai:
     # Anthropic Configuration
     anthropic:
@@ -40,7 +43,7 @@ spring:  # Database Configuration
           connections:
             my-mcp-server:
               url: ${mcp-servers.banking-server}
-        type: async
+        type: ASYNC
         request-timeout: 120s
   threads:
     virtual:
@@ -61,9 +64,7 @@ app:
 
 # Server Configuration
 server:
-  tomcat:
-    max-swallow-size: -1
-  port: ${PORT:9090}
+  port: ${CLIENT_PORT:8080}
   servlet:
     context-path: /
   error:
