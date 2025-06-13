@@ -38,20 +38,13 @@ spring:  # Database Configuration
 
     # MCP Configuration
     mcp:
-      client:
-        sse:
-          connections:
-            my-mcp-server:
-              url: ${mcp-servers.banking-server}
-        type: ASYNC
-        request-timeout: 120s
+      clients:
+        banking-server:
+          url: ${BANKING_SERVER_URL:http://localhost:8081}
+
   threads:
     virtual:
       enabled: true
-
-
-mcp-servers:
-  banking-server: ${BANKING_SERVER_URL:http://localhost:8081}
 
 app:
   chat:
@@ -59,7 +52,7 @@ app:
   mcp:
     custom-server:
       enabled: true
-      reconnect-attempts: 3
+      reconnect-attempts: 30
       reconnect-delay: 5
 
 # Server Configuration
@@ -70,3 +63,7 @@ server:
   error:
     include-message: always
     include-binding-errors: always
+
+logging:
+  pattern:
+    console: "%clr(%d{yy-MM-dd E HH:mm:ss.SSS}){blue} %clr(%-5p) %clr(${PID}){faint} %clr(---){faint} %clr([%8.15t]){cyan} %clr(%-40.40logger{0}){blue} %clr(:){red} %clr(%m){faint}%n"

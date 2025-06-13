@@ -191,7 +191,7 @@ public class ChatService {
             log.warn("Failed to get MCP context", e);
         }
         return new Prompt(messages, AnthropicChatOptions.builder()
-                .toolCallbacks(new AsyncMcpToolCallbackProvider(mcpService.getMcpClients()).getToolCallbacks())
+                .toolCallbacks(new AsyncMcpToolCallbackProvider(mcpService.getBankingClient()).getToolCallbacks())
                 .build());
     }
 
