@@ -188,6 +188,20 @@
 <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden hidden"></div>
 
 <script>
+
+    function getAuthHeaders() {
+        const jwtToken = localStorage.getItem('jwtToken');
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+
+        if (jwtToken) {
+            headers['Authorization'] = `Bearer ${jwtToken}`;
+        }
+
+        return headers;
+    }
+
     const API_BASE = '/api';
     let currentUser = null;
     let currentConversationId = null;
@@ -200,9 +214,10 @@
     });
 
     async function initializeApp() {
-        // Check if user is logged in
         const userData = localStorage.getItem('currentUser');
-        if (!userData) {
+        const jwtToken = localStorage.getItem('jwtToken');
+
+        if (!userData || !jwtToken) {
             window.location.href = '/';
             return;
         }
@@ -210,31 +225,30 @@
         currentUser = JSON.parse(userData);
         document.getElementById('userDisplayName').textContent = currentUser.displayName || currentUser.customerId;
 
-        // Load user session and conversations
         await loadUserSession();
-
-        // Check MCP status
         await checkMcpStatus();
-
-        // Set up event listeners
         setupEventListeners();
-
-        // Set up auto-resize for textarea
         setupTextareaAutoResize();
-
-        // Initial setup of sidebar visibility
         updateSidebarVisibility();
     }
 
     async function loadUserSession() {
         try {
-            const response = await fetch(`${API_BASE}/chat/session/${currentUser.customerId}`);
+            const response = await fetch(`${API_BASE}/chat/session/${currentUser.customerId}`, {
+                headers: getAuthHeaders()
+            });
+
+            if (response.status === 401) {
+                // Token expired or invalid, redirect to login
+                handleAuthError();
+                return;
+            }
+
             if (response.ok) {
                 const sessionData = await response.json();
                 conversations = sessionData.conversations || [];
                 renderConversations();
 
-                // Load the most recent conversation if available
                 if (sessionData.currentConversationId) {
                     await loadConversation(sessionData.currentConversationId);
                 }
@@ -248,7 +262,15 @@
 
     async function checkMcpStatus() {
         try {
-            const response = await fetch(`${API_BASE}/chat/mcp/status`);
+            const response = await fetch(`${API_BASE}/chat/mcp/status`, {
+                headers: getAuthHeaders()
+            });
+
+            if (response.status === 401) {
+                handleAuthError();
+                return;
+            }
+
             if (response.ok) {
                 const status = await response.json();
                 updateMcpStatus(status);
@@ -332,23 +354,16 @@
 
         if (!message || isTyping) return;
 
-        // Add user message to UI
         addMessageToUI('user', message);
-
-        // Clear input
         messageInput.value = '';
         messageInput.style.height = 'auto';
         handleInputChange({ target: messageInput });
-
-        // Show typing indicator
         showTypingIndicator();
 
         try {
             const response = await fetch(`${API_BASE}/chat/message`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({
                     customerId: currentUser.customerId,
                     message: message,
@@ -357,23 +372,25 @@
                 })
             });
 
+            if (response.status === 401) {
+                handleAuthError();
+                return;
+            }
+
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
 
             const chatResponse = await response.json();
 
-            // Update current conversation ID
             if (!currentConversationId) {
                 currentConversationId = chatResponse.conversationId;
-                await loadUserSession(); // Refresh conversations list
+                await loadUserSession();
                 document.getElementById('deleteConversationBtn').classList.remove('hidden');
             }
 
-            // Add AI response to UI
             addMessageToUI('assistant', chatResponse.response);
 
-            // Update conversation title if it's a new conversation
             if (document.getElementById('conversationTitle').textContent === 'New Conversation') {
                 const title = message.length > 50 ? message.substring(0, 47) + '...' : message;
                 document.getElementById('conversationTitle').textContent = title;
@@ -477,27 +494,27 @@
     async function loadConversation(conversationId) {
         try {
             currentConversationId = conversationId;
-
-            // Update UI
             document.getElementById('conversationTitle').textContent = 'Loading...';
             document.getElementById('deleteConversationBtn').classList.remove('hidden');
-
-            // Clear messages
             document.getElementById('messagesArea').innerHTML = '';
 
-            // Load messages
-            const response = await fetch(`${API_BASE}/chat/conversation/${conversationId}/messages`);
+            const response = await fetch(`${API_BASE}/chat/conversation/${conversationId}/messages`, {
+                headers: getAuthHeaders()
+            });
+
+            if (response.status === 401) {
+                handleAuthError();
+                return;
+            }
+
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
 
             const messages = await response.json();
-
-            // Find conversation title
             const conversation = conversations.find(c => c.conversationId === conversationId);
             document.getElementById('conversationTitle').textContent = conversation ? conversation.title : 'Conversation';
 
-            // Render messages
             messages.forEach(msg => {
                 if (msg.messageType === 'USER') {
                     addMessageToUI('user', msg.content);
@@ -506,10 +523,7 @@
                 }
             });
 
-            // Update conversation selection in sidebar
             renderConversations();
-
-            // Close sidebar on mobile
             closeSidebar();
 
         } catch (error) {
@@ -547,8 +561,14 @@
 
         try {
             const response = await fetch(`${API_BASE}/chat/conversation/${currentConversationId}?customerId=${currentUser.customerId}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: getAuthHeaders()
             });
+
+            if (response.status === 401) {
+                handleAuthError();
+                return;
+            }
 
             if (response.ok) {
                 await loadUserSession();
@@ -567,7 +587,16 @@
             const refreshBtn = document.getElementById('mcpRefreshBtn');
             refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i>';
 
-            await fetch(`${API_BASE}/chat/mcp/refresh-tools`, { method: 'POST' });
+            const response = await fetch(`${API_BASE}/chat/mcp/refresh-tools`, {
+                method: 'POST',
+                headers: getAuthHeaders()
+            });
+
+            if (response.status === 401) {
+                handleAuthError();
+                return;
+            }
+
             await checkMcpStatus();
         } catch (error) {
             console.error('Error refreshing MCP:', error);
@@ -576,13 +605,25 @@
         }
     }
 
+    function handleAuthError() {
+        console.warn('Authentication error - redirecting to login');
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('jwtToken');
+        window.location.href = '/';
+    }
+
+
     async function handleLogout() {
         try {
-            await fetch(`${API_BASE}/auth/logout?customerId=${currentUser.customerId}`, { method: 'POST' });
+            await fetch(`${API_BASE}/auth/logout?customerId=${currentUser.customerId}`, {
+                method: 'POST',
+                headers: getAuthHeaders()
+            });
         } catch (error) {
             console.warn('Logout request failed:', error);
         } finally {
             localStorage.removeItem('currentUser');
+            localStorage.removeItem('jwtToken');
             window.location.href = '/';
         }
     }
