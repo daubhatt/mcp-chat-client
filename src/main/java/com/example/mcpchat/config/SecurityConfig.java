@@ -21,7 +21,7 @@ public class SecurityConfig {
         http
                 .authorizeExchange(exchanges ->
                         exchanges
-                                .pathMatchers("/", "/api/auth/**", "/token/**", "/public/**", "/error").permitAll()
+                                .pathMatchers("/").permitAll()
                                 .anyExchange().authenticated()
                 )
                 .oauth2ResourceServer(oAuth2ResourceServerSpec ->
