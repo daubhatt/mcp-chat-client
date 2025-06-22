@@ -3,17 +3,16 @@ package com.example.mcpchat.controller;
 import com.example.mcpchat.dto.CustomerSession;
 import com.example.mcpchat.dto.LoginRequest;
 import com.example.mcpchat.service.ChatService;
-
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
-
-import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Objects;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -26,12 +25,8 @@ public class AuthController {
     private final ChatService chatService;
 
     @PostMapping("/login")
-    public ResponseEntity<CustomerSession> login(@Valid @RequestBody LoginRequest request) {
-        log.debug("Login attempt for username: {}", request.getUsername());
-        if (!Objects.equals(request.getUsername(), "CUST001")) {
-            log.warn("Login failed: username is valid");
-            return ResponseEntity.badRequest().build();
-        }
+    public ResponseEntity<CustomerSession> login(@Valid @RequestBody LoginRequest request, @AuthenticationPrincipal Jwt jwt) {
+        log.info("Login attempt for username: {}, {}", request.getUsername(), jwt.getSubject());
         try {
             // Get or create customer session
             CustomerSession session = chatService.getCustomerSession(request.getUsername());

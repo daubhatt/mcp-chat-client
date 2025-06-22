@@ -36,7 +36,7 @@
             <i class="fas fa-robot text-3xl text-indigo-600"></i>
         </div>
         <h1 class="text-3xl font-bold text-white mb-2">MCP Chat Client</h1>
-        <p class="text-white opacity-80">Enter your username to start chatting</p>
+        <p class="text-white opacity-80">Enter your username and password to start chatting</p>
     </div>
 
     <form id="loginForm" class="space-y-6">
@@ -53,6 +53,22 @@
                     maxlength="100"
                     class="w-full px-4 py-3 rounded-lg border border-white border-opacity-30 bg-white bg-opacity-20 text-white placeholder-white placeholder-opacity-60 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 focus:border-transparent"
                     placeholder="Enter your username"
+            >
+        </div>
+
+        <div>
+            <label for="password" class="block text-white text-sm font-medium mb-2">
+                <i class="fas fa-user mr-2"></i>Password
+            </label>
+            <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    required
+                    minlength="2"
+                    maxlength="100"
+                    class="w-full px-4 py-3 rounded-lg border border-white border-opacity-30 bg-white bg-opacity-20 text-white placeholder-white placeholder-opacity-60 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 focus:border-transparent"
+                    placeholder="Enter your password"
             >
         </div>
 
@@ -99,10 +115,16 @@
         e.preventDefault();
 
         const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value.trim();
         const displayName = document.getElementById('displayName').value.trim();
 
         if (!username) {
             showError('Username is required');
+            return;
+        }
+
+        if (!password) {
+            showError('Password is required');
             return;
         }
 
@@ -122,6 +144,7 @@
                 },
                 body: JSON.stringify({
                     username: username,
+                    password: password,
                     displayName: displayName || username
                 })
             });

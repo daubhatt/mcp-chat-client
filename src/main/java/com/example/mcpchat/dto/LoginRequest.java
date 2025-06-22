@@ -15,5 +15,9 @@ public class LoginRequest {
     @Size(min = 2, max = 100, message = "Username must be between 2 and 100 characters")
     private String username;
 
+    @NotBlank(message = "Password is required")
+    @Size(min = 1, max = 100, message = "Password must be between 1 and 100 characters")
+    private String password;
+
     private String displayName;
 }

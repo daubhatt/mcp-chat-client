@@ -13,6 +13,7 @@ import com.example.mcpchat.repository.CustomerRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.client.McpAsyncClient;
+import io.modelcontextprotocol.spec.McpSchema;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.anthropic.AnthropicChatModel;
@@ -47,6 +48,35 @@ public class ChatService {
     @Value("${app.chat.max-history-size:50}")
     private int maxHistorySize;
 
+    // Update the createPromptWithMcpContext method in ChatService.java
+
+    private Prompt createPromptWithMcpContext(List<Message> messages, String customerId) {
+        try {
+            // Get available MCP tools for this specific user
+            List<McpSchema.Tool> userTools = mcpService.getAvailableToolsForUser(customerId);
+            if (!userTools.isEmpty()) {
+                String mcpContext = userTools.toString();
+                messages.addFirst(new SystemMessage("Available tools: " + mcpContext));
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get MCP context for user: {}", customerId, e);
+        }
+
+        // Get user-specific MCP client
+        McpAsyncClient userMcpClient = mcpService.getClientForUser(customerId);
+
+        AnthropicChatOptions.Builder optionsBuilder = AnthropicChatOptions.builder();
+
+        if (userMcpClient != null) {
+            optionsBuilder.toolCallbacks(new AsyncMcpToolCallbackProvider(userMcpClient).getToolCallbacks());
+        } else {
+            log.warn("No MCP client available for user: {}", customerId);
+        }
+
+        return new Prompt(messages, optionsBuilder.build());
+    }
+
+    // Update the processMessage method to pass customerId
     @Transactional
     public com.example.mcpchat.dto.ChatResponse processMessage(ChatRequest request) {
         log.debug("Processing chat message for customer: {}", request.getCustomerId());
@@ -68,8 +98,8 @@ public class ChatService {
             messages.add(new UserMessage(request.getMessage()));
             messages.add(new UserMessage("Customer Id is " + customer.getCustomerId()));
 
-            // Create prompt with MCP context if available
-            Prompt prompt = createPromptWithMcpContext(messages);
+            // Create prompt with user-specific MCP context
+            Prompt prompt = createPromptWithMcpContext(messages, request.getCustomerId());
 
             // Get AI response
             ChatResponse aiResponse = anthropicChatModel.call(prompt);
@@ -180,20 +210,7 @@ public class ChatService {
         };
     }
 
-    private Prompt createPromptWithMcpContext(List<Message> messages) {
-        try {
-            // Get available MCP tools
-            String mcpContext = mcpService.getAvailableTools().toString();
-            if (mcpContext != null && !mcpContext.isEmpty()) {
-                messages.addFirst(new SystemMessage("Available tools: " + mcpContext));
-            }
-        } catch (Exception e) {
-            log.warn("Failed to get MCP context", e);
-        }
-        return new Prompt(messages, AnthropicChatOptions.builder()
-                .toolCallbacks(new AsyncMcpToolCallbackProvider(mcpService.getBankingClient()).getToolCallbacks())
-                .build());
-    }
+
 
     private List<com.example.mcpchat.dto.ChatResponse.ToolCallResult> extractToolCalls(ChatResponse response) {
         // Extract tool calls from the AI response if any
