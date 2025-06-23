@@ -18,11 +18,12 @@ public class McpClientConnectionFactory {
 
     private final ObjectMapper objectMapper;
 
-    public McpAsyncClient createNewConnection(String serverUrl) {
+    public McpAsyncClient createNewConnection(String serverUrl, String jwtToken) {
         // Logic to create and return an MCP client
         log.info("Configuring MCP client for server: {}", serverUrl);
         try {
-            WebFluxSseClientTransport transport = WebFluxSseClientTransport.builder(WebClient.builder().baseUrl(serverUrl))
+            WebFluxSseClientTransport transport = WebFluxSseClientTransport.builder(WebClient.builder().baseUrl(serverUrl)
+                            .defaultHeaders(httpHeaders -> httpHeaders.add("Authorization", "Bearer " + jwtToken)))
                     .objectMapper(objectMapper)
                     .build();
             McpAsyncClient asyncClient = McpClient.async(transport)

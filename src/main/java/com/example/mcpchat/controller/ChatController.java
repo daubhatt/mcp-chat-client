@@ -10,6 +10,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -28,7 +30,7 @@ public class ChatController {
     private final McpService mcpService;
 
     @PostMapping("/message")
-    public ResponseEntity<ChatResponse> sendMessage(@Valid @RequestBody ChatRequest request) {
+    public ResponseEntity<ChatResponse> sendMessage(@Valid @RequestBody ChatRequest request, @AuthenticationPrincipal Jwt jwt) {
         log.debug("Received chat message from customer: {}", request.getCustomerId());
 
         try {
@@ -36,7 +38,7 @@ public class ChatController {
             chatService.updateCustomerActivity(request.getCustomerId());
 
             // Process the message
-            ChatResponse response = chatService.processMessage(request);
+            ChatResponse response = chatService.processMessage(request, jwt.getTokenValue());
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
@@ -49,7 +51,7 @@ public class ChatController {
     }
 
     @GetMapping("/session/{customerId}")
-    public ResponseEntity<CustomerSession> getCustomerSession(@PathVariable String customerId) {
+    public ResponseEntity<CustomerSession> getCustomerSession(@PathVariable String customerId, @AuthenticationPrincipal Jwt jwt) {
         log.debug("Getting session for customer: {}", customerId);
 
         CustomerSession session = chatService.getCustomerSession(customerId);
@@ -61,7 +63,7 @@ public class ChatController {
     }
 
     @GetMapping("/conversation/{conversationId}/messages")
-    public ResponseEntity<List<MessageDTO>> getConversationMessages(@PathVariable String conversationId) {
+    public ResponseEntity<List<MessageDTO>> getConversationMessages(@PathVariable String conversationId, @AuthenticationPrincipal Jwt jwt) {
         log.debug("Getting messages for conversation: {}", conversationId);
 
         List<MessageDTO> messages = chatService.getConversationMessages(conversationId);
@@ -83,12 +85,12 @@ public class ChatController {
     }
 
     @GetMapping("/mcp/status")
-    public ResponseEntity<Map<String, Object>> getMcpStatus() {
+    public ResponseEntity<Map<String, Object>> getMcpStatus(@AuthenticationPrincipal Jwt jwt) {
         return ResponseEntity.ok(mcpService.getMcpStatus());
     }
 
     @PostMapping("/mcp/reconnect")
-    public ResponseEntity<Map<String, String>> reconnectMcp() {
+    public ResponseEntity<Map<String, String>> reconnectMcp(@AuthenticationPrincipal Jwt jwt) {
         try {
             mcpService.reconnect();
             return ResponseEntity.ok(Map.of("status", "reconnection initiated"));
@@ -99,7 +101,7 @@ public class ChatController {
     }
 
     @PostMapping("/mcp/refresh-tools")
-    public ResponseEntity<Map<String, Object>> refreshMcpTools() {
+    public ResponseEntity<Map<String, Object>> refreshMcpTools(@AuthenticationPrincipal Jwt jwt) {
         try {
             mcpService.refreshTools();
             return ResponseEntity.ok(mcpService.getMcpStatus());

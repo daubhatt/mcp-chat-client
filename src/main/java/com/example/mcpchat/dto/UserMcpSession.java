@@ -15,10 +15,12 @@ public class UserMcpSession {
     @Setter
     private volatile boolean connected = false;
     private LocalDateTime lastAccessed;
+    private final String jwtToken;
 
-    public UserMcpSession(String userId) {
+    public UserMcpSession(String userId, String jwtToken) {
         this.userId = userId;
         this.lastAccessed = LocalDateTime.now();
+        this.jwtToken = jwtToken;
     }
 
     public void updateLastAccessed() {

@@ -10,6 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.context.ReactiveSecurityContextHolder;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
@@ -33,17 +35,8 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<CustomerSession> login(@Valid @RequestBody LoginRequest request, @AuthenticationPrincipal Jwt jwt) {
-
+        log.info("Login request: {}", jwt.getTokenValue());
         String authenticatedUsername = jwt.getSubject();
-        log.debug("Login attempt for authenticated user: {}", authenticatedUsername);
-
-        // Optional: Validate that the username in request matches the authenticated user
-        if (!authenticatedUsername.equals(request.getUsername())) {
-            log.warn("Username mismatch: authenticated as {} but requesting login for {}",
-                    authenticatedUsername, request.getUsername());
-            return ResponseEntity.badRequest().build();
-        }
-
         try {
             // Get or create customer session
             CustomerSession session = chatService.getCustomerSession(authenticatedUsername);
@@ -66,7 +59,7 @@ public class AuthController {
 
             // Initialize MCP session for the user
             try {
-                mcpService.getClientForUser(authenticatedUsername);
+                mcpService.getClientForUser(authenticatedUsername, jwt.getTokenValue());
                 log.debug("MCP session initialized for user: {}", authenticatedUsername);
             } catch (Exception e) {
                 log.warn("Failed to initialize MCP session for user: {}", authenticatedUsername, e);
@@ -83,20 +76,9 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(@RequestParam(required = false) String customerId) {
+    public ResponseEntity<Void> logout(@RequestParam(required = false) String customerId, @AuthenticationPrincipal Jwt jwt) {
         // Get the authenticated user from Spring Security context
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
-        if (authentication == null || !authentication.isAuthenticated()) {
-            log.warn("Logout attempt without valid authentication");
-            return ResponseEntity.status(UNAUTHORIZED).build();
-        }
-
-        String authenticatedUsername = authentication.getName();
-
-        // Use authenticated username if customerId not provided or doesn't match
-        String userToLogout = (customerId != null && customerId.equals(authenticatedUsername)) ?
-                customerId : authenticatedUsername;
+        String userToLogout = jwt.getSubject();
 
         log.debug("Logout for customer: {}", userToLogout);
 
@@ -118,22 +100,5 @@ public class AuthController {
             log.warn("Error during logout for customer: {}", userToLogout, e);
             return ResponseEntity.ok().build(); // Don't fail logout on error
         }
-    }
-
-    @GetMapping("/me")
-    public ResponseEntity<Map<String, Object>> getCurrentUser() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return ResponseEntity.status(UNAUTHORIZED).build();
-        }
-
-        Map<String, Object> userInfo = Map.of(
-                "username", authentication.getName(),
-                "authorities", authentication.getAuthorities(),
-                "authenticated", authentication.isAuthenticated()
-        );
-
-        return ResponseEntity.ok(userInfo);
     }
 }

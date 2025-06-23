@@ -48,9 +48,7 @@ public class ChatService {
     @Value("${app.chat.max-history-size:50}")
     private int maxHistorySize;
 
-    // Update the createPromptWithMcpContext method in ChatService.java
-
-    private Prompt createPromptWithMcpContext(List<Message> messages, String customerId) {
+    private Prompt createPromptWithMcpContext(List<Message> messages, String customerId, String jwtToken) {
         try {
             // Get available MCP tools for this specific user
             List<McpSchema.Tool> userTools = mcpService.getAvailableToolsForUser(customerId);
@@ -63,7 +61,7 @@ public class ChatService {
         }
 
         // Get user-specific MCP client
-        McpAsyncClient userMcpClient = mcpService.getClientForUser(customerId);
+        McpAsyncClient userMcpClient = mcpService.getClientForUser(customerId, jwtToken);
 
         AnthropicChatOptions.Builder optionsBuilder = AnthropicChatOptions.builder();
 
@@ -78,7 +76,7 @@ public class ChatService {
 
     // Update the processMessage method to pass customerId
     @Transactional
-    public com.example.mcpchat.dto.ChatResponse processMessage(ChatRequest request) {
+    public com.example.mcpchat.dto.ChatResponse processMessage(ChatRequest request, String jwtToken) {
         log.debug("Processing chat message for customer: {}", request.getCustomerId());
 
         try {
@@ -99,7 +97,7 @@ public class ChatService {
             messages.add(new UserMessage("Customer Id is " + customer.getCustomerId()));
 
             // Create prompt with user-specific MCP context
-            Prompt prompt = createPromptWithMcpContext(messages, request.getCustomerId());
+            Prompt prompt = createPromptWithMcpContext(messages, request.getCustomerId(), jwtToken);
 
             // Get AI response
             ChatResponse aiResponse = anthropicChatModel.call(prompt);

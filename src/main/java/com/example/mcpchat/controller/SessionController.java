@@ -4,6 +4,8 @@ import com.example.mcpchat.service.McpService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.validation.annotation.Validated;
 
@@ -33,12 +35,12 @@ public class SessionController {
     }
 
     @PostMapping("/mcp/connect/{customerId}")
-    public ResponseEntity<Map<String, String>> connectUserMcp(@PathVariable String customerId) {
+    public ResponseEntity<Map<String, String>> connectUserMcp(@PathVariable String customerId , @AuthenticationPrincipal Jwt jwt) {
         log.debug("Connecting MCP for customer: {}", customerId);
 
         try {
             // This will create or reconnect the user's MCP session
-            mcpService.getClientForUser(customerId);
+            mcpService.getClientForUser(customerId, jwt.getTokenValue());
 
             return ResponseEntity.ok(Map.of(
                     "status", "success",

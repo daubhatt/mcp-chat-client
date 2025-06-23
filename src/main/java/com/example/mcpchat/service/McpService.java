@@ -59,7 +59,7 @@ public class McpService {
         if (mcpEnabled) {
             log.info("Initializing MCP service with user-specific sessions");
             if (globalToolsEnabled) {
-                loadGlobalTools();
+                //loadGlobalTools();
             } else {
                 log.info("Global tools feature is disabled");
             }
@@ -91,13 +91,13 @@ public class McpService {
     /**
      * Get or create MCP client for a specific user
      */
-    public McpAsyncClient getClientForUser(String userId) {
+    public McpAsyncClient getClientForUser(String userId, String jwtToken) {
         if (!mcpEnabled) {
             log.warn("MCP is disabled, cannot create client for user: {}", userId);
             return null;
         }
 
-        UserMcpSession session = userSessions.computeIfAbsent(userId, this::createUserSession);
+        UserMcpSession session = userSessions.computeIfAbsent(userId, key -> createUserSession(key, jwtToken));
         session.updateLastAccessed();
 
         if (session.getClient() == null || !session.isConnected()) {
@@ -201,7 +201,7 @@ public class McpService {
             log.info("Refreshing MCP tools for all users");
 
             if (globalToolsEnabled) {
-                loadGlobalTools();
+                //loadGlobalTools();
             }
 
             // Refresh tools for all active sessions
@@ -226,16 +226,16 @@ public class McpService {
         });
 
         if (globalToolsEnabled) {
-            loadGlobalTools();
+            //loadGlobalTools();
         }
     }
 
     /**
      * Create a new user session
      */
-    private UserMcpSession createUserSession(String userId) {
+    private UserMcpSession createUserSession(String userId, String jwtToken) {
         log.debug("Creating new MCP session for user: {}", userId);
-        UserMcpSession session = new UserMcpSession(userId);
+        UserMcpSession session = new UserMcpSession(userId, jwtToken);
         reconnectUserSession(session);
         return session;
     }
@@ -250,7 +250,7 @@ public class McpService {
                 log.debug("Attempting to connect MCP client for user: {} (attempt {})",
                         session.getUserId(), attempts + 1);
 
-                McpAsyncClient client = mcpClientConnectionFactory.createNewConnection(bankingServerUrl);
+                McpAsyncClient client = mcpClientConnectionFactory.createNewConnection(bankingServerUrl, session.getJwtToken());
                 session.setClient(client);
                 session.setConnected(true);
                 session.updateLastAccessed();
@@ -295,7 +295,7 @@ public class McpService {
 
         try {
             // Create a temporary client to load tools
-            McpAsyncClient tempClient = mcpClientConnectionFactory.createNewConnection(bankingServerUrl);
+            McpAsyncClient tempClient = mcpClientConnectionFactory.createNewConnection(bankingServerUrl, null); //TODO pass JWT if needed
 
             tempClient.listTools()
                     .map(McpSchema.ListToolsResult::tools)
