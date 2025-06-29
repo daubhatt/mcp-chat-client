@@ -39,30 +39,26 @@
         .conversation-item:hover {
             background-color: rgba(99, 102, 241, 0.1);
         }
-        .mcp-status {
-            border-radius: 50%;
-            width: 8px;
-            height: 8px;
-        }
-        .mcp-connected {
-            background-color: #10b981;
-        }
-        .mcp-disconnected {
-            background-color: #ef4444;
-        }
         .message-content {
             white-space: pre-wrap;
         }
-        /* NEW CUSTOM CSS FOR MOBILE SIDebar */
-        @media (max-width: 1023px) { /* Below lg breakpoint */
+        .summary-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .summary-stat {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+        /* Mobile sidebar styles */
+        @media (max-width: 1023px) {
             .sidebar-closed-mobile {
-                width: 0 !important; /* Force width to 0 */
-                min-width: 0 !important; /* Ensure it collapses in flex context */
-                overflow: hidden !important; /* Hide content */
-                transform: translateX(-100%); /* Visually slide out */
+                width: 0 !important;
+                min-width: 0 !important;
+                overflow: hidden !important;
+                transform: translateX(-100%);
             }
             .sidebar-open-mobile {
-                transform: translateX(0); /* Visually slide in */
+                transform: translateX(0);
             }
         }
     </style>
@@ -70,8 +66,7 @@
 <body class="bg-gray-100">
 <div class="flex h-screen">
     <!-- Sidebar -->
-    <div id="sidebar" class="bg-white shadow-lg border-r border-gray-200 flex flex-col sidebar-transition lg:w-80 lg:relative lg:z-auto fixed top-0 left-0 h-screen w-64 z-30">
-        <!-- Header -->
+    <div id="sidebar" class="bg-white shadow-lg border-r border-gray-200 flex flex-col sidebar-transition sidebar-closed-mobile lg:w-80 lg:relative lg:z-auto fixed top-0 left-0 h-screen w-64 z-30">        <!-- Header -->
         <div class="p-4 border-b border-gray-200">
             <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center space-x-2">
@@ -85,19 +80,16 @@
                 </button>
             </div>
 
-            <!-- MCP Status -->
-            <div class="flex items-center space-x-2 text-sm text-gray-600">
-                <div id="mcpStatus" class="mcp-status mcp-disconnected"></div>
-                <span id="mcpStatusText">Checking MCP connection...</span>
-                <button id="mcpRefreshBtn" class="text-indigo-600 hover:text-indigo-800 ml-2">
-                    <i class="fas fa-sync-alt text-xs"></i>
-                </button>
-            </div>
-
             <!-- New Conversation Button -->
-            <button id="newConversationBtn" class="w-full mt-4 bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition duration-200 flex items-center justify-center space-x-2">
+            <button id="newConversationBtn" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition duration-200 flex items-center justify-center space-x-2 mb-4">
                 <i class="fas fa-plus"></i>
                 <span>New Conversation</span>
+            </button>
+
+            <!-- Back to Dashboard Button (in sidebar) -->
+            <button id="backToDashboardBtn" class="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition duration-200 flex items-center justify-center space-x-2">
+                <i class="fas fa-tachometer-alt"></i>
+                <span>Dashboard</span>
             </button>
         </div>
 
@@ -111,7 +103,7 @@
     </div>
 
     <!-- Main Chat Area -->
-    <div id= "mainChatArea" class="flex-1 flex flex-col chat-container w-full">
+    <div id="mainChatArea" class="flex-1 flex flex-col chat-container w-full">
         <!-- Chat Header -->
         <div class="bg-white shadow-sm border-b border-gray-200 p-4">
             <div class="flex items-center justify-between">
@@ -119,6 +111,13 @@
                     <button id="sidebarToggle" class="lg:hidden text-gray-500 hover:text-gray-700">
                         <i class="fas fa-bars"></i>
                     </button>
+
+                    <!-- Back to Summary Button (show when in conversation) -->
+                    <button id="backToSummaryBtn" class="hidden text-gray-500 hover:text-gray-700 p-2 rounded-lg hover:bg-gray-100 flex items-center space-x-2" title="Back to Account Overview">
+                        <i class="fas fa-arrow-left"></i>
+                        <span class="hidden sm:inline text-sm">Dashboard</span>
+                    </button>
+
                     <h1 class="text-xl font-semibold text-gray-800" id="conversationTitle">
                         Select a conversation or start a new one
                     </h1>
@@ -134,8 +133,103 @@
         <!-- Messages Area -->
         <div id="messagesContainer" class="flex-1 overflow-y-auto p-4 messages-container">
             <div id="messagesArea" class="space-y-4">
-                <!-- Welcome message -->
-                <div class="flex justify-center">
+                <!-- Customer Summary (shown by default) -->
+                <div id="customerSummaryMain" class="hidden">
+                    <div class="max-w-4xl mx-auto">
+                        <!-- Welcome Header -->
+                        <div class="text-center mb-8">
+                            <div class="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <i class="fas fa-user-circle text-3xl text-indigo-600"></i>
+                            </div>
+                            <h2 class="text-2xl font-bold text-gray-800 mb-2" id="welcomeTitle">Welcome back!</h2>
+                            <p class="text-gray-600" id="welcomeSubtitle">Here's your account overview</p>
+                        </div>
+
+                        <!-- AI Summary Card -->
+                        <div id="aiSummaryCard" class="summary-card rounded-xl p-6 text-white mb-6">
+                            <div class="flex items-center space-x-2 mb-4">
+                                <i class="fas fa-robot"></i>
+                                <span class="font-semibold">AI Assistant Summary</span>
+                            </div>
+                            <div id="aiSummaryMainContent" class="text-lg leading-relaxed">
+                                <!-- AI-generated summary will be loaded here -->
+                            </div>
+                        </div>
+
+                        <!-- Stats Grid -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-comments text-blue-600"></i>
+                                    </div>
+                                    <div>
+                                        <div class="text-sm text-gray-500">Conversations</div>
+                                        <div class="text-2xl font-bold text-gray-800" id="totalConversations">0</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-envelope text-green-600"></i>
+                                    </div>
+                                    <div>
+                                        <div class="text-sm text-gray-500">Total Messages</div>
+                                        <div class="text-2xl font-bold text-gray-800" id="totalMessages">0</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-tools text-purple-600"></i>
+                                    </div>
+                                    <div>
+                                        <div class="text-sm text-gray-500">Available Tools</div>
+                                        <div class="text-2xl font-bold text-gray-800" id="availableTools">0</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-calendar text-indigo-600"></i>
+                                    </div>
+                                    <div>
+                                        <div class="text-sm text-gray-500">Member Since</div>
+                                        <div class="text-sm font-bold text-gray-800" id="memberSince">-</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recent Activity -->
+                        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center space-x-2">
+                                    <i class="fas fa-clock text-gray-600"></i>
+                                    <h3 class="text-lg font-semibold text-gray-800">Recent Activity</h3>
+                                </div>
+                                <span class="text-sm text-gray-500" id="lastActiveTime">-</span>
+                            </div>
+                            <div id="recentActivity" class="space-y-3">
+                                <!-- Recent conversations will be shown here -->
+                            </div>
+                        </div>
+
+                        <!-- Call to Action -->
+                        <div class="text-center mt-8">
+                            <button id="startNewConversationBtn" class="bg-indigo-600 text-white px-8 py-3 rounded-lg hover:bg-indigo-700 transition duration-200 flex items-center justify-center space-x-2 mx-auto">
+                                <i class="fas fa-plus"></i>
+                                <span>Start New Conversation</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Default welcome message (fallback) -->
+                <div id="defaultWelcome" class="flex justify-center">
                     <div class="text-center p-8">
                         <div class="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
                             <i class="fas fa-robot text-2xl text-indigo-600"></i>
@@ -161,13 +255,13 @@
         <div class="bg-white border-t border-gray-200 p-4">
             <form id="messageForm" class="flex space-x-3">
                 <div class="flex-1 relative">
-                        <textarea
-                                id="messageInput"
-                                placeholder="Type your message..."
-                                class="w-full p-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                rows="2"
-                                maxlength="4000"
-                        ></textarea>
+                    <textarea
+                            id="messageInput"
+                            placeholder="Type your message..."
+                            class="w-full p-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            rows="2"
+                            maxlength="4000"
+                    ></textarea>
                     <div id="charCounter" class="absolute bottom-1 right-2 text-xs text-gray-400">0/4000</div>
                 </div>
                 <button
@@ -188,7 +282,6 @@
 <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden hidden"></div>
 
 <script>
-
     function getAuthHeaders() {
         const jwtToken = localStorage.getItem('jwtToken');
         const headers = {
@@ -225,8 +318,12 @@
         currentUser = JSON.parse(userData);
         document.getElementById('userDisplayName').textContent = currentUser.displayName || currentUser.customerId;
 
+        // Initialize with summary view
+        showSummaryViewWithLoading();
+
         await loadUserSession();
-        await checkMcpStatus();
+
+        await loadCustomerSummary();
         setupEventListeners();
         setupTextareaAutoResize();
         updateSidebarVisibility();
@@ -239,7 +336,6 @@
             });
 
             if (response.status === 401) {
-                // Token expired or invalid, redirect to login
                 handleAuthError();
                 return;
             }
@@ -249,9 +345,11 @@
                 conversations = sessionData.conversations || [];
                 renderConversations();
 
-                if (sessionData.currentConversationId) {
-                    await loadConversation(sessionData.currentConversationId);
-                }
+                // Don't auto-load the latest conversation - keep showing summary
+                // Only auto-load if we're in a specific conversation context
+                // if (sessionData.currentConversationId) {
+                //     await loadConversation(sessionData.currentConversationId);
+                // }
             } else {
                 console.warn('Failed to load user session');
             }
@@ -260,9 +358,10 @@
         }
     }
 
-    async function checkMcpStatus() {
+    async function loadCustomerSummary() {
+        console.log('Loading customer summary...');
         try {
-            const response = await fetch(`${API_BASE}/chat/mcp/status`, {
+            const response = await fetch(`${API_BASE}/chat/summary/${currentUser.customerId}`, {
                 headers: getAuthHeaders()
             });
 
@@ -272,28 +371,342 @@
             }
 
             if (response.ok) {
-                const status = await response.json();
-                updateMcpStatus(status);
+                const summary = await response.json();
+                console.log('Customer summary loaded successfully');
+
+                // Use setTimeout to ensure this runs after any other DOM updates
+                setTimeout(() => {
+                    renderCustomerSummaryMain(summary);
+                }, 10);
             } else {
-                updateMcpStatus({ connected: false, enabled: false });
+                console.warn('Failed to load customer summary');
+                showDefaultWelcome();
             }
         } catch (error) {
-            console.error('Error checking MCP status:', error);
-            updateMcpStatus({ connected: false, enabled: false });
+            console.error('Error loading customer summary:', error);
+            showDefaultWelcome();
         }
     }
 
-    function updateMcpStatus(status) {
-        const statusIndicator = document.getElementById('mcpStatus');
-        const statusText = document.getElementById('mcpStatusText');
+    function renderCustomerSummaryMain(summary) {
+        console.log('Rendering customer summary with data:', summary);
 
-        if (status.connected && status.enabled) {
-            statusIndicator.className = 'mcp-status mcp-connected';
-            statusText.textContent = `MCP Connected (${status.toolCount || 0} tools)`;
-        } else {
-            statusIndicator.className = 'mcp-status mcp-disconnected';
-            statusText.textContent = status.enabled ? 'MCP Disconnected' : 'MCP Disabled';
+        // Update welcome title
+        const welcomeTitle = document.getElementById('welcomeTitle');
+        if (welcomeTitle) {
+            welcomeTitle.textContent = `Welcome back, ${summary.displayName || summary.customerId}!`;
         }
+
+        // Update AI summary
+        const aiSummaryContent = document.getElementById('aiSummaryMainContent');
+        if (aiSummaryContent) {
+            if (summary.aiSummary) {
+                aiSummaryContent.innerHTML = summary.aiSummary;
+            } else {
+                aiSummaryContent.innerHTML = "Welcome! I'm here to help you with various tasks using the available tools. Start a conversation to see what I can do for you.";
+            }
+        }
+
+        // Update stats
+        const totalConversations = document.getElementById('totalConversations');
+        const totalMessages = document.getElementById('totalMessages');
+        const availableTools = document.getElementById('availableTools');
+        const memberSince = document.getElementById('memberSince');
+        const lastActiveTime = document.getElementById('lastActiveTime');
+
+        if (totalConversations) totalConversations.textContent = summary.totalConversations || 0;
+        if (totalMessages) totalMessages.textContent = summary.totalMessages || 0;
+        if (availableTools) availableTools.textContent = summary.availableToolsCount || 0;
+        if (memberSince) memberSince.textContent = summary.joinedAt || 'Today';
+        if (lastActiveTime) lastActiveTime.textContent = `Last active: ${summary.lastActiveAt || 'Now'}`;
+
+        // Render tools
+        renderToolsList(summary.availableTools || []);
+
+        // Render recent activity
+        renderRecentActivity();
+
+        // FORCE show the summary and hide default welcome
+        const summaryMain = document.getElementById('customerSummaryMain');
+        const defaultWelcome = document.getElementById('defaultWelcome');
+
+        if (summaryMain) {
+            summaryMain.classList.remove('hidden');
+            console.log('Summary FORCED to show after data load');
+        }
+        if (defaultWelcome) {
+            defaultWelcome.classList.add('hidden');
+            console.log('Default welcome FORCED to hide after data load');
+        }
+
+        // Update conversation title
+        document.getElementById('conversationTitle').textContent = 'Account Overview';
+
+        // Hide navigation buttons since we're in summary
+        document.getElementById('deleteConversationBtn').classList.add('hidden');
+        document.getElementById('backToSummaryBtn').classList.add('hidden');
+
+        // Ensure we stay in summary mode
+        currentConversationId = null;
+    }
+
+    function renderToolsList(tools) {
+        const toolsList = document.getElementById('toolsList');
+
+        if (tools.length === 0) {
+            toolsList.innerHTML = `
+                <div class="col-span-2 text-center text-gray-500 py-4">
+                    <i class="fas fa-tools text-2xl mb-2"></i>
+                    <p>No tools currently available</p>
+                </div>
+            `;
+            return;
+        }
+
+        toolsList.innerHTML = tools.map(tool => `
+            <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                <div class="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <i class="fas fa-cog text-indigo-600 text-sm"></i>
+                </div>
+                <div class="flex-1">
+                    <div class="font-medium text-sm text-gray-800">${escapeHtml(tool.name)}</div>
+                    <div class="text-xs text-gray-600 mt-1">${escapeHtml(tool.description)}</div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function renderRecentActivity() {
+        const recentActivity = document.getElementById('recentActivity');
+
+        if (!recentActivity) {
+            console.log('Recent activity element not found');
+            return;
+        }
+
+        if (conversations.length === 0) {
+            recentActivity.innerHTML = `
+                <div class="text-center text-gray-500 py-4">
+                    <i class="fas fa-history text-2xl mb-2"></i>
+                    <p>No conversations yet. Start your first conversation!</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Show up to 3 most recent conversations
+        const recentConversations = conversations.slice(0, 3);
+
+        recentActivity.innerHTML = recentConversations.map(conv => `
+            <div class="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition duration-200"
+                 onclick="loadConversationFromSummary('${conv.conversationId}')">
+                <div class="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-comment text-indigo-600 text-sm"></i>
+                </div>
+                <div class="flex-1">
+                    <div class="font-medium text-sm text-gray-800 truncate">${escapeHtml(conv.title)}</div>
+                    <div class="text-xs text-gray-500 truncate">${escapeHtml(conv.lastMessage)}</div>
+                </div>
+                <div class="text-xs text-gray-400">${formatDate(conv.updatedAt)}</div>
+            </div>
+        `).join('');
+
+        console.log('Rendered recent activity with', recentConversations.length, 'conversations');
+    }
+
+    function showDefaultWelcome() {
+        const summaryMain = document.getElementById('customerSummaryMain');
+        const defaultWelcome = document.getElementById('defaultWelcome');
+
+        if (summaryMain) {
+            summaryMain.classList.add('hidden');
+        }
+        if (defaultWelcome) {
+            defaultWelcome.classList.remove('hidden');
+        }
+
+        document.getElementById('conversationTitle').textContent = 'Welcome to MCP Chat';
+    }
+
+    // Show summary by default with loading state
+    function showSummaryViewWithLoading() {
+        // Update conversation title immediately
+        document.getElementById('conversationTitle').textContent = 'Account Overview';
+
+        // Hide navigation buttons since we're in summary
+        document.getElementById('deleteConversationBtn').classList.add('hidden');
+        document.getElementById('backToSummaryBtn').classList.add('hidden');
+
+        // Ensure we're not in a conversation
+        currentConversationId = null;
+
+        // Show the summary view
+        const summaryMain = document.getElementById('customerSummaryMain');
+        const defaultWelcome = document.getElementById('defaultWelcome');
+
+        if (summaryMain) {
+            summaryMain.classList.remove('hidden');
+            console.log('Summary view shown');
+        }
+        if (defaultWelcome) {
+            defaultWelcome.classList.add('hidden');
+            console.log('Default welcome hidden');
+        }
+
+        // Show loading state in AI summary
+        const aiSummaryContent = document.getElementById('aiSummaryMainContent');
+        if (aiSummaryContent) {
+            aiSummaryContent.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Loading your personalized summary...';
+        }
+    }
+
+    function showSummaryView() {
+        console.log('showSummaryView() called - returning to dashboard');
+
+        // Clear the messages area completely and rebuild summary
+        const messagesArea = document.getElementById('messagesArea');
+        messagesArea.innerHTML = `
+            <!-- Customer Summary (shown by default) -->
+            <div id="customerSummaryMain" class="">
+                <div class="max-w-4xl mx-auto">
+                    <!-- Welcome Header -->
+                    <div class="text-center mb-8">
+                        <div class="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <i class="fas fa-user-circle text-3xl text-indigo-600"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold text-gray-800 mb-2" id="welcomeTitle">Welcome back!</h2>
+                        <p class="text-gray-600" id="welcomeSubtitle">Here's your account overview</p>
+                    </div>
+
+                    <!-- AI Summary Card -->
+                    <div id="aiSummaryCard" class="summary-card rounded-xl p-6 text-white mb-6">
+                        <div class="flex items-center space-x-2 mb-4">
+                            <i class="fas fa-robot"></i>
+                            <span class="font-semibold">AI Assistant Summary</span>
+                        </div>
+                        <div id="aiSummaryMainContent" class="text-lg leading-relaxed">
+                            <i class="fas fa-spinner fa-spin mr-2"></i>Loading your personalized summary...
+                        </div>
+                    </div>
+
+                    <!-- Stats Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-comments text-blue-600"></i>
+                                </div>
+                                <div>
+                                    <div class="text-sm text-gray-500">Conversations</div>
+                                    <div class="text-2xl font-bold text-gray-800" id="totalConversations">-</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-envelope text-green-600"></i>
+                                </div>
+                                <div>
+                                    <div class="text-sm text-gray-500">Total Messages</div>
+                                    <div class="text-2xl font-bold text-gray-800" id="totalMessages">-</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-tools text-purple-600"></i>
+                                </div>
+                                <div>
+                                    <div class="text-sm text-gray-500">Available Tools</div>
+                                    <div class="text-2xl font-bold text-gray-800" id="availableTools">-</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-calendar text-indigo-600"></i>
+                                </div>
+                                <div>
+                                    <div class="text-sm text-gray-500">Member Since</div>
+                                    <div class="text-sm font-bold text-gray-800" id="memberSince">-</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Available Tools Section -->
+                    <div id="toolsSection" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+                        <div class="flex items-center space-x-2 mb-4">
+                            <i class="fas fa-toolbox text-gray-600"></i>
+                            <h3 class="text-lg font-semibold text-gray-800">Available Tools</h3>
+                        </div>
+                        <div id="toolsList" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div class="col-span-2 text-center text-gray-500 py-4">
+                                <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                                <p>Loading available tools...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity -->
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center space-x-2">
+                                <i class="fas fa-clock text-gray-600"></i>
+                                <h3 class="text-lg font-semibold text-gray-800">Recent Activity</h3>
+                            </div>
+                            <span class="text-sm text-gray-500" id="lastActiveTime">-</span>
+                        </div>
+                        <div id="recentActivity" class="space-y-3">
+                            <div class="text-center text-gray-500 py-4">
+                                <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                                <p>Loading recent activity...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Call to Action -->
+                    <div class="text-center mt-8">
+                        <button id="startNewConversationBtn" class="bg-indigo-600 text-white px-8 py-3 rounded-lg hover:bg-indigo-700 transition duration-200 flex items-center justify-center space-x-2 mx-auto">
+                            <i class="fas fa-plus"></i>
+                            <span>Start New Conversation</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Default welcome message (fallback) -->
+            <div id="defaultWelcome" class="hidden flex justify-center">
+                <div class="text-center p-8">
+                    <div class="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-robot text-2xl text-indigo-600"></i>
+                    </div>
+                    <h2 class="text-xl font-semibold text-gray-800 mb-2">Welcome to MCP Chat!</h2>
+                    <p class="text-gray-600">Start a conversation or select an existing one from the sidebar.</p>
+                </div>
+            </div>
+        `;
+
+        // Update header and navigation state
+        document.getElementById('conversationTitle').textContent = 'Account Overview';
+        document.getElementById('deleteConversationBtn').classList.add('hidden');
+        document.getElementById('backToSummaryBtn').classList.add('hidden');
+        currentConversationId = null;
+
+        // Re-bind the event listener for the new button
+        const newConvBtn = document.getElementById('startNewConversationBtn');
+        if (newConvBtn) {
+            newConvBtn.addEventListener('click', startNewConversation);
+        }
+
+        // Load fresh data
+        loadCustomerSummary();
+        renderConversations();
+
+        console.log('Summary view recreated successfully');
     }
 
     function setupEventListeners() {
@@ -308,11 +721,18 @@
         // New conversation button
         document.getElementById('newConversationBtn').addEventListener('click', startNewConversation);
 
+        // Start new conversation from summary
+        const startBtn = document.getElementById('startNewConversationBtn');
+        if (startBtn) {
+            startBtn.addEventListener('click', startNewConversation);
+        }
+
+        // Back to summary buttons
+        document.getElementById('backToSummaryBtn').addEventListener('click', showSummaryView);
+        document.getElementById('backToDashboardBtn').addEventListener('click', showSummaryView);
+
         // Logout button
         document.getElementById('logoutBtn').addEventListener('click', handleLogout);
-
-        // MCP refresh button
-        document.getElementById('mcpRefreshBtn').addEventListener('click', handleMcpRefresh);
 
         // Delete conversation button
         document.getElementById('deleteConversationBtn').addEventListener('click', handleDeleteConversation);
@@ -411,31 +831,31 @@
         if (type === 'user') {
             messageDiv.className = 'flex justify-end';
             messageDiv.innerHTML = `
-                    <div class="message-bubble bg-indigo-600 text-white p-3 rounded-lg rounded-br-none">
-                        <div class="message-content">${escapeHtml(content)}</div>
-                        <div class="text-xs opacity-75 mt-1">${new Date().toLocaleTimeString()}</div>
-                    </div>
-                `;
+                <div class="message-bubble bg-indigo-600 text-white p-3 rounded-lg rounded-br-none">
+                    <div class="message-content">${escapeHtml(content)}</div>
+                    <div class="text-xs opacity-75 mt-1">${new Date().toLocaleTimeString()}</div>
+                </div>
+            `;
         } else if (type === 'assistant') {
             messageDiv.className = 'flex justify-start';
             messageDiv.innerHTML = `
-                    <div class="flex space-x-2 max-w-full">
-                        <div class="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center flex-shrink-0">
-                            <i class="fas fa-robot text-sm text-gray-600"></i>
-                        </div>
-                        <div class="message-bubble bg-white border border-gray-200 p-3 rounded-lg rounded-bl-none">
-                            <div class="message-content">${escapeHtml(content)}</div>
-                            <div class="text-xs text-gray-500 mt-1">${new Date().toLocaleTimeString()}</div>
-                        </div>
+                <div class="flex space-x-2 max-w-full">
+                    <div class="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-robot text-sm text-gray-600"></i>
                     </div>
-                `;
+                    <div class="message-bubble bg-white border border-gray-200 p-3 rounded-lg rounded-bl-none">
+                        <div class="message-content">${escapeHtml(content)}</div>
+                        <div class="text-xs text-gray-500 mt-1">${new Date().toLocaleTimeString()}</div>
+                    </div>
+                </div>
+            `;
         } else if (type === 'system') {
             messageDiv.className = 'flex justify-center';
             messageDiv.innerHTML = `
-                    <div class="bg-yellow-100 border border-yellow-200 text-yellow-800 p-2 rounded text-sm">
-                        ${escapeHtml(content)}
-                    </div>
-                `;
+                <div class="bg-yellow-100 border border-yellow-200 text-yellow-800 p-2 rounded text-sm">
+                    ${escapeHtml(content)}
+                </div>
+            `;
         }
 
         messagesArea.appendChild(messageDiv);
@@ -466,21 +886,24 @@
 
         if (conversations.length === 0) {
             conversationsList.innerHTML = `
-                    <div class="text-center text-gray-500 text-sm py-4">
-                        No conversations yet.<br>Start a new one!
-                    </div>
-                `;
+                <div class="text-center text-gray-500 text-sm py-4">
+                    No conversations yet.<br>Start a new one!
+                </div>
+            `;
             return;
         }
 
+        // Don't highlight any conversation if we're in summary view
+        const highlightId = currentConversationId;
+
         conversationsList.innerHTML = conversations.map(conv => `
-                <div class="conversation-item p-3 rounded-lg cursor-pointer border border-transparent hover:border-indigo-200 ${conv.conversationId === currentConversationId ? 'bg-indigo-50 border-indigo-200' : ''}"
-                     data-conversation-id="${conv.conversationId}">
-                    <div class="font-medium text-sm text-gray-800 truncate">${escapeHtml(conv.title)}</div>
-                    <div class="text-xs text-gray-500 mt-1 truncate">${escapeHtml(conv.lastMessage)}</div>
-                    <div class="text-xs text-gray-400 mt-1">${formatDate(conv.updatedAt)} • ${conv.messageCount} messages</div>
-                </div>
-            `).join('');
+            <div class="conversation-item p-3 rounded-lg cursor-pointer border border-transparent hover:border-indigo-200 ${conv.conversationId === highlightId ? 'bg-indigo-50 border-indigo-200' : ''}"
+                 data-conversation-id="${conv.conversationId}">
+                <div class="font-medium text-sm text-gray-800 truncate">${escapeHtml(conv.title)}</div>
+                <div class="text-xs text-gray-500 mt-1 truncate">${escapeHtml(conv.lastMessage)}</div>
+                <div class="text-xs text-gray-400 mt-1">${formatDate(conv.updatedAt)} • ${conv.messageCount} messages</div>
+            </div>
+        `).join('');
 
         // Add click listeners to conversation items
         conversationsList.querySelectorAll('.conversation-item').forEach(item => {
@@ -496,6 +919,9 @@
             currentConversationId = conversationId;
             document.getElementById('conversationTitle').textContent = 'Loading...';
             document.getElementById('deleteConversationBtn').classList.remove('hidden');
+            document.getElementById('backToSummaryBtn').classList.remove('hidden');
+
+            // Clear the messages area and hide summary
             document.getElementById('messagesArea').innerHTML = '';
 
             const response = await fetch(`${API_BASE}/chat/conversation/${conversationId}/messages`, {
@@ -532,21 +958,27 @@
         }
     }
 
+    // Function to load conversation from summary page
+    window.loadConversationFromSummary = function(conversationId) {
+        loadConversation(conversationId);
+    }
+
     function startNewConversation() {
         currentConversationId = null;
         document.getElementById('conversationTitle').textContent = 'New Conversation';
         document.getElementById('deleteConversationBtn').classList.add('hidden');
+        document.getElementById('backToSummaryBtn').classList.remove('hidden');
         document.getElementById('messagesArea').innerHTML = `
-                <div class="flex justify-center">
-                    <div class="text-center p-8">
-                        <div class="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <i class="fas fa-robot text-2xl text-indigo-600"></i>
-                        </div>
-                        <h2 class="text-xl font-semibold text-gray-800 mb-2">New Conversation</h2>
-                        <p class="text-gray-600">Start by sending a message below.</p>
+            <div class="flex justify-center">
+                <div class="text-center p-8">
+                    <div class="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-robot text-2xl text-indigo-600"></i>
                     </div>
+                    <h2 class="text-xl font-semibold text-gray-800 mb-2">New Conversation</h2>
+                    <p class="text-gray-600">Start by sending a message below.</p>
                 </div>
-            `;
+            </div>
+        `;
         renderConversations();
         closeSidebar();
         document.getElementById('messageInput').focus();
@@ -572,7 +1004,8 @@
 
             if (response.ok) {
                 await loadUserSession();
-                startNewConversation();
+                await loadCustomerSummary(); // Refresh summary after deletion
+                showSummaryView(); // Return to summary view
             } else {
                 alert('Failed to delete conversation. Please try again.');
             }
@@ -582,36 +1015,12 @@
         }
     }
 
-    async function handleMcpRefresh() {
-        try {
-            const refreshBtn = document.getElementById('mcpRefreshBtn');
-            refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i>';
-
-            const response = await fetch(`${API_BASE}/chat/mcp/refresh-tools`, {
-                method: 'POST',
-                headers: getAuthHeaders()
-            });
-
-            if (response.status === 401) {
-                handleAuthError();
-                return;
-            }
-
-            await checkMcpStatus();
-        } catch (error) {
-            console.error('Error refreshing MCP:', error);
-        } finally {
-            document.getElementById('mcpRefreshBtn').innerHTML = '<i class="fas fa-sync-alt text-xs"></i>';
-        }
-    }
-
     function handleAuthError() {
         console.warn('Authentication error - redirecting to login');
         localStorage.removeItem('currentUser');
         localStorage.removeItem('jwtToken');
         window.location.href = '/';
     }
-
 
     async function handleLogout() {
         try {
@@ -632,16 +1041,13 @@
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebarOverlay');
 
-        // Check if sidebar is currently open based on the class that signals openness
         const isOpen = sidebar.classList.contains('sidebar-open-mobile');
 
         if (isOpen) {
-            // Close sidebar
             sidebar.classList.remove('sidebar-open-mobile');
             sidebar.classList.add('sidebar-closed-mobile');
             overlay.classList.add('hidden');
         } else {
-            // Open sidebar
             sidebar.classList.remove('sidebar-closed-mobile');
             sidebar.classList.add('sidebar-open-mobile');
             overlay.classList.remove('hidden');
@@ -652,7 +1058,6 @@
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebarOverlay');
 
-        // Only close if it's currently open
         if (sidebar.classList.contains('sidebar-open-mobile')) {
             sidebar.classList.remove('sidebar-open-mobile');
             sidebar.classList.add('sidebar-closed-mobile');
@@ -662,37 +1067,27 @@
 
     function updateSidebarVisibility() {
         const sidebar = document.getElementById('sidebar');
-        const mainChatArea = document.getElementById('mainChatArea'); // Get main chat area
+        const mainChatArea = document.getElementById('mainChatArea');
         const overlay = document.getElementById('sidebarOverlay');
 
         if (window.innerWidth >= 1024) {
-            // Desktop View:
-            // Ensure sidebar is visible and takes its w-80 space in the flex layout
             sidebar.classList.remove('sidebar-closed-mobile', 'sidebar-open-mobile', 'fixed', 'top-0', 'left-0', 'h-screen', 'w-64', 'z-30');
-            sidebar.classList.add('lg:w-80', 'lg:relative', 'lg:z-auto'); // Re-apply desktop specific classes
-
-            // Ensure overlay is hidden on desktop
+            sidebar.classList.add('lg:w-80', 'lg:relative', 'lg:z-auto');
             overlay.classList.add('hidden');
-
-            // Ensure main chat area is flex-1 (already has it, but good to ensure)
             mainChatArea.classList.add('flex-1');
-            mainChatArea.classList.remove('w-full'); // Remove mobile full width
+            mainChatArea.classList.remove('w-full');
         } else {
-            // Mobile View:
-            // Sidebar should be fixed, off-screen by default, and take no flex space.
-            sidebar.classList.remove('lg:w-80', 'lg:relative', 'lg:z-auto'); // Remove desktop specific classes
-            sidebar.classList.add('fixed', 'top-0', 'left-0', 'h-screen', 'w-64', 'z-30'); // Apply mobile specific positioning
+            sidebar.classList.remove('lg:w-80', 'lg:relative', 'lg:z-auto');
+            sidebar.classList.add('fixed', 'top-0', 'left-0', 'h-screen', 'w-64', 'z-30');
 
             if (!sidebar.classList.contains('sidebar-open-mobile')) {
                 sidebar.classList.add('sidebar-closed-mobile');
-                sidebar.classList.remove('sidebar-open-mobile'); // Ensure open class is not there
+                sidebar.classList.remove('sidebar-open-mobile');
                 overlay.classList.add('hidden');
             }
 
-
-            // Ensure main chat area takes full width, as sidebar is 'fixed' and out of flow
             mainChatArea.classList.add('w-full');
-            mainChatArea.classList.remove('flex-1'); // Remove flex-1 if it interferes with w-full
+            mainChatArea.classList.remove('flex-1');
         }
     }
 
@@ -711,17 +1106,12 @@
             return 'Just now';
         } else if (diffInHours < 24) {
             return `${Math.floor(diffInHours)}h ago`;
-        } else if (diffInHours < 168) { // 7 days
+        } else if (diffInHours < 168) {
             return `${Math.floor(diffInHours / 24)}d ago`;
         } else {
             return date.toLocaleDateString();
         }
     }
-
-    // Initialize mobile sidebar state
-    /*if (window.innerWidth < 1024) {
-        document.getElementById('sidebar').style.transform = 'translateX(-100%)';
-    }*/
 
     // Handle window resize
     window.addEventListener('resize', updateSidebarVisibility);

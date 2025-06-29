@@ -1,5 +1,6 @@
 package com.example.mcpchat.controller;
 
+import com.example.mcpchat.config.AiSummaryCache;
 import com.example.mcpchat.dto.CustomerSession;
 import com.example.mcpchat.dto.LoginRequest;
 import com.example.mcpchat.service.ChatService;
@@ -8,19 +9,12 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.context.ReactiveSecurityContextHolder;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
-
-import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -32,12 +26,14 @@ public class AuthController {
 
     private final ChatService chatService;
     private final McpService mcpService;
+    private final AiSummaryCache aiSummaryCache;
 
     @PostMapping("/login")
     public ResponseEntity<CustomerSession> login(@Valid @RequestBody LoginRequest request, @AuthenticationPrincipal Jwt jwt) {
         log.info("Login request: {}", jwt.getTokenValue());
         String authenticatedUsername = jwt.getSubject();
         try {
+            mcpService.closeUserSession(authenticatedUsername);
             // Get or create customer session
             CustomerSession session = chatService.getCustomerSession(authenticatedUsername);
 
@@ -76,7 +72,7 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(@RequestParam(required = false) String customerId, @AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<Void> logout(@AuthenticationPrincipal Jwt jwt) {
         // Get the authenticated user from Spring Security context
         String userToLogout = jwt.getSubject();
 
@@ -88,6 +84,7 @@ public class AuthController {
 
             // Close MCP session for the user
             try {
+                aiSummaryCache.evict(userToLogout);
                 mcpService.closeUserSession(userToLogout);
                 log.debug("MCP session closed for user: {}", userToLogout);
             } catch (Exception e) {

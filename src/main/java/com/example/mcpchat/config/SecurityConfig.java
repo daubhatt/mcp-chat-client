@@ -21,7 +21,7 @@ public class SecurityConfig {
         http
                 .authorizeExchange(exchanges ->
                         exchanges
-                                .pathMatchers("/","/chat", "/static/**", "/css/**", "/js/**", "/oauth2/**").permitAll()
+                                .pathMatchers("/","/chat","/favicon.ico", "/static/**", "/css/**", "/js/**", "/oauth2/**").permitAll()
                                 .pathMatchers("/api/auth/login").authenticated()
                                 .anyExchange().authenticated()
                 )

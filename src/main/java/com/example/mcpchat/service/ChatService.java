@@ -1,5 +1,6 @@
 package com.example.mcpchat.service;
 
+import com.example.mcpchat.config.AiSummaryCache;
 import com.example.mcpchat.dto.ChatRequest;
 import com.example.mcpchat.dto.ConversationSummary;
 import com.example.mcpchat.dto.CustomerSession;
@@ -26,10 +27,12 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.mcp.AsyncMcpToolCallbackProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -44,6 +47,7 @@ public class ChatService {
     private final ConversationRepository conversationRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final ObjectMapper objectMapper;
+    private final AiSummaryCache aiSummaryCache;
 
     @Value("${app.chat.max-history-size:50}")
     private int maxHistorySize;
@@ -321,5 +325,107 @@ public class ChatService {
     @Transactional
     public void updateCustomerActivity(String customerId) {
         customerRepository.updateLastActiveTime(customerId, LocalDateTime.now());
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> getCustomerSummary(String customerId, String jwtToken) {
+
+        Map<String, Object> summary = new HashMap<>();
+
+        try {
+            // Get customer basic info
+            Optional<Customer> customerOpt = customerRepository.findByCustomerId(customerId);
+            if (customerOpt.isPresent()) {
+                Customer customer = customerOpt.get();
+                summary.put("customerId", customer.getCustomerId());
+                summary.put("displayName", customer.getDisplayName());
+                summary.put("joinedAt", customer.getCreatedAt().format(DateTimeFormatter.ofPattern("MMM dd, yyyy")));
+                summary.put("lastActiveAt", customer.getLastActiveAt().format(DateTimeFormatter.ofPattern("MMM dd, yyyy 'at' HH:mm")));
+            }
+
+            // Get conversation statistics
+            List<Conversation> conversations = conversationRepository.findByCustomerIdOrderByUpdatedAtDesc(customerId);
+            summary.put("totalConversations", conversations.size());
+
+            if (!conversations.isEmpty()) {
+                summary.put("firstConversation", conversations.getLast().getCreatedAt().format(DateTimeFormatter.ofPattern("MMM dd, yyyy")));
+                summary.put("lastConversation", conversations.getFirst().getUpdatedAt().format(DateTimeFormatter.ofPattern("MMM dd, yyyy")));
+            }
+
+            // Get total message count
+            long totalMessages = conversations.stream()
+                    .mapToLong(conv -> chatMessageRepository.countByConversationId(conv.getConversationId()))
+                    .sum();
+            summary.put("totalMessages", totalMessages);
+
+            // Get available MCP tools
+            List<McpSchema.Tool> availableTools = mcpService.getAvailableToolsForUser(customerId);
+            summary.put("availableToolsCount", availableTools.size());
+            summary.put("availableTools", availableTools.stream()
+                    .map(tool -> Map.of(
+                            "name", tool.name(),
+                            "description", tool.description()
+                    ))
+                    .collect(Collectors.toList()));
+
+            // Check MCP connection status
+            summary.put("mcpConnected", mcpService.isConnectedForUser(customerId));
+
+            // Generate summary using AI
+            String aiSummary = generateAISummary(customerId, jwtToken, summary);
+            summary.put("aiSummary", aiSummary);
+
+        } catch (Exception e) {
+            log.error("Error generating customer summary for {}", customerId, e);
+            summary.put("error", "Unable to generate complete summary");
+        }
+
+        return summary;
+    }
+
+    private String generateAISummary(String customerId, String jwtToken, Map<String, Object> basicInfo) {
+        try {
+            // Create a prompt to generate customer summary
+            List<Message> messages = new ArrayList<>();
+
+            String systemPrompt = String.format(
+                    "You are an AI Banking Assistant for %s. Profile: %s\n\n" +
+
+                            "## PRIMARY TOOL:\n" +
+                            "Always use getFinancialOverview('%s') first - provides ALL data in one call: accounts, loans, credit cards, investments, transactions, metrics, upcoming payments.\n\n" +
+
+                            "## CAPABILITIES:\n" +
+                            "Accounts: balances, trends, optimizations | Transactions: spending analysis, categories, anomalies | " +
+                            "Loans: schedules, payoff strategies | Credit: utilization, rewards optimization | " +
+                            "Investments: performance, diversification | Planning: net worth, cash flow, budgets\n\n" +
+
+                            "## RESPONSE RULES:\n" +
+                            "- Exactly 4-5 sentences with dense data: AED amounts, percentages, dates, trends\n" +
+                            "- Pack multiple insights per sentence using semicolons/commas\n" +
+                            "- Include specific numbers, account IDs, due dates, recommendations\n" +
+                            "- Start with warm greeting, end with actionable next steps\n\n" +
+
+                            "## HTML FORMAT:\n" +
+                            "Use clean HTML: <h2>, <ul>/<li>, <table>, <strong>, <p>. No inline styles. Mobile-friendly structure.",
+                    customerId, basicInfo.toString(), customerId
+            );
+
+            messages.add(new SystemMessage(systemPrompt));
+            messages.add(new UserMessage("Generate a personalized welcome summary for this customer and call tools wherever necessary."));
+
+            // Use MCP context if available
+            Prompt prompt = createPromptWithMcpContext(messages, customerId, jwtToken);
+
+            // Get AI response
+            ChatResponse aiResponse = anthropicChatModel.call(prompt);
+            return aiResponse.getResult().getOutput().getText();
+
+        } catch (Exception e) {
+            log.warn("Failed to generate AI summary for customer {}", customerId, e);
+            return String.format("Welcome back, %s! You have %s conversations with %s total messages.",
+                    basicInfo.get("displayName"),
+                    basicInfo.get("totalConversations"),
+                    basicInfo.get("totalMessages"));
+        }
     }
 }

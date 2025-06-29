@@ -35,7 +35,7 @@ public class McpService {
     @Value("${app.mcp.session.cleanup-interval:300}")
     private int sessionCleanupIntervalSeconds;
 
-    @Value("${app.mcp.session.max-idle-time:1800}")
+    @Value("${app.mcp.session.max-idle-time:300}")
     private int maxIdleTimeSeconds;
 
     @Value("${app.mcp.global-tools.enabled:false}")
@@ -58,11 +58,6 @@ public class McpService {
     public void initialize() {
         if (mcpEnabled) {
             log.info("Initializing MCP service with user-specific sessions");
-            if (globalToolsEnabled) {
-                //loadGlobalTools();
-            } else {
-                log.info("Global tools feature is disabled");
-            }
             startSessionCleanup();
         } else {
             log.info("MCP service is disabled");
@@ -163,74 +158,6 @@ public class McpService {
     }
 
     /**
-     * Get MCP status including user session information
-     */
-    public Map<String, Object> getMcpStatus() {
-        Map<String, Object> status = new HashMap<>();
-        status.put("enabled", mcpEnabled);
-        status.put("globalToolsEnabled", globalToolsEnabled);
-        status.put("globalToolsLoaded", globalToolsLoaded);
-        status.put("toolCount", globalToolsEnabled ? globalAvailableTools.size() : 0);
-        status.put("activeUserSessions", userSessions.size());
-
-        if (globalToolsEnabled && globalToolsLoaded) {
-            status.put("tools", globalAvailableTools.stream()
-                    .map(tool -> Map.of(
-                            "name", tool.name(),
-                            "description", tool.description()
-                    ))
-                    .toList());
-        } else {
-            status.put("tools", List.of());
-        }
-
-        // Add per-user connection status
-        Map<String, Boolean> userConnections = new HashMap<>();
-        userSessions.forEach((userId, session) ->
-                userConnections.put(userId, session.isConnected()));
-        status.put("userConnections", userConnections);
-
-        return status;
-    }
-
-    /**
-     * Refresh tools for all users
-     */
-    public void refreshTools() {
-        if (mcpEnabled) {
-            log.info("Refreshing MCP tools for all users");
-
-            if (globalToolsEnabled) {
-                //loadGlobalTools();
-            }
-
-            // Refresh tools for all active sessions
-            userSessions.values().forEach(this::refreshUserTools);
-        }
-    }
-
-    /**
-     * Reconnect all user sessions
-     */
-    public void reconnect() {
-        log.info("Manual reconnection requested for all users");
-
-        if (globalToolsEnabled) {
-            globalToolsLoaded = false;
-            globalAvailableTools.clear();
-        }
-
-        userSessions.values().forEach(session -> {
-            session.setConnected(false);
-            reconnectUserSession(session);
-        });
-
-        if (globalToolsEnabled) {
-            //loadGlobalTools();
-        }
-    }
-
-    /**
      * Create a new user session
      */
     private UserMcpSession createUserSession(String userId, String jwtToken) {
@@ -277,67 +204,6 @@ public class McpService {
         if (!session.isConnected()) {
             log.error("Failed to connect MCP client for user: {} after {} attempts",
                     session.getUserId(), reconnectAttempts);
-        }
-    }
-
-    /**
-     * Load global tools (shared configuration)
-     */
-    private void loadGlobalTools() {
-        if (!globalToolsEnabled) {
-            log.debug("Global tools feature is disabled, skipping load");
-            return;
-        }
-
-        if (globalToolsLoaded) {
-            return;
-        }
-
-        try {
-            // Create a temporary client to load tools
-            McpAsyncClient tempClient = mcpClientConnectionFactory.createNewConnection(bankingServerUrl, null); //TODO pass JWT if needed
-
-            tempClient.listTools()
-                    .map(McpSchema.ListToolsResult::tools)
-                    .doOnNext(toolLists -> {
-                        synchronized (this) {
-                            globalAvailableTools = new ArrayList<>(toolLists);
-                            globalToolsLoaded = true;
-                        }
-                        log.info("Loaded {} global tools from MCP server", globalAvailableTools.size());
-                    })
-                    .doOnError(e -> {
-                        log.error("Failed to load global MCP tools", e);
-                        globalToolsLoaded = false;
-                    })
-                    .doFinally(signalType -> {
-                        try {
-                            tempClient.close();
-                        } catch (Exception e) {
-                            log.warn("Error closing temporary MCP client", e);
-                        }
-                    })
-                    .subscribe();
-
-        } catch (Exception e) {
-            log.error("Failed to create temporary client for loading global tools", e);
-            globalToolsLoaded = false;
-        }
-    }
-
-    /**
-     * Refresh tools for a specific user session
-     */
-    private void refreshUserTools(UserMcpSession session) {
-        if (session.getClient() != null && session.isConnected()) {
-            session.getClient().listTools()
-                    .doOnError(ex -> {
-                        log.warn("Failed to refresh tools for user: {}", session.getUserId(), ex);
-                        session.setConnected(false);
-                    })
-                    .doOnSuccess(result ->
-                            log.debug("Refreshed tools for user: {}", session.getUserId()))
-                    .subscribe();
         }
     }
 

@@ -1,11 +1,11 @@
 package com.example.mcpchat.controller;
 
+import com.example.mcpchat.config.AiSummaryCache;
 import com.example.mcpchat.dto.ChatRequest;
 import com.example.mcpchat.dto.ChatResponse;
 import com.example.mcpchat.dto.CustomerSession;
 import com.example.mcpchat.dto.MessageDTO;
 import com.example.mcpchat.service.ChatService;
-import com.example.mcpchat.service.McpService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,7 +27,7 @@ import java.util.Map;
 public class ChatController {
 
     private final ChatService chatService;
-    private final McpService mcpService;
+    private final AiSummaryCache aiSummaryCache;
 
     @PostMapping("/message")
     public ResponseEntity<ChatResponse> sendMessage(@Valid @RequestBody ChatRequest request, @AuthenticationPrincipal Jwt jwt) {
@@ -84,30 +84,16 @@ public class ChatController {
         }
     }
 
-    @GetMapping("/mcp/status")
-    public ResponseEntity<Map<String, Object>> getMcpStatus(@AuthenticationPrincipal Jwt jwt) {
-        return ResponseEntity.ok(mcpService.getMcpStatus());
-    }
+    @GetMapping("/summary/{customerId}")
+    public ResponseEntity<Map<String, Object>> getCustomerSummary(@PathVariable String customerId, @AuthenticationPrincipal Jwt jwt) {
+        log.debug("Getting customer summary for: {}", customerId);
 
-    @PostMapping("/mcp/reconnect")
-    public ResponseEntity<Map<String, String>> reconnectMcp(@AuthenticationPrincipal Jwt jwt) {
         try {
-            mcpService.reconnect();
-            return ResponseEntity.ok(Map.of("status", "reconnection initiated"));
+            Map<String, Object> summary =  aiSummaryCache.get(customerId, userId -> chatService.getCustomerSummary(customerId, jwt.getTokenValue()));
+            return ResponseEntity.ok(summary);
         } catch (Exception e) {
-            return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "Failed to reconnect: " + e.getMessage()));
-        }
-    }
-
-    @PostMapping("/mcp/refresh-tools")
-    public ResponseEntity<Map<String, Object>> refreshMcpTools(@AuthenticationPrincipal Jwt jwt) {
-        try {
-            mcpService.refreshTools();
-            return ResponseEntity.ok(mcpService.getMcpStatus());
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "Failed to refresh tools: " + e.getMessage()));
+            log.error("Error getting customer summary", e);
+            return ResponseEntity.internalServerError().build();
         }
     }
 }
