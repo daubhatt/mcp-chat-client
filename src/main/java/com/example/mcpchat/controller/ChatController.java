@@ -27,7 +27,6 @@ import java.util.Map;
 public class ChatController {
 
     private final ChatService chatService;
-    private final AiSummaryCache aiSummaryCache;
 
     @PostMapping("/message")
     public ResponseEntity<ChatResponse> sendMessage(@Valid @RequestBody ChatRequest request, @AuthenticationPrincipal Jwt jwt) {
@@ -89,7 +88,7 @@ public class ChatController {
         log.debug("Getting customer summary for: {}", customerId);
 
         try {
-            Map<String, Object> summary =  aiSummaryCache.get(customerId, userId -> chatService.getCustomerSummary(customerId, jwt.getTokenValue()));
+            Map<String, Object> summary =  chatService.getCustomerSummary(customerId, jwt.getTokenValue());
             return ResponseEntity.ok(summary);
         } catch (Exception e) {
             log.error("Error getting customer summary", e);

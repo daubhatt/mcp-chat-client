@@ -27,7 +27,6 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.mcp.AsyncMcpToolCallbackProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,27 +48,18 @@ public class ChatService {
     private final ObjectMapper objectMapper;
     private final AiSummaryCache aiSummaryCache;
 
-    @Value("${app.chat.max-history-size:50}")
+    @Value("${app.chat.max-history-size:20}")
     private int maxHistorySize;
 
-    private Prompt createPromptWithMcpContext(List<Message> messages, String customerId, String jwtToken) {
-        try {
-            // Get available MCP tools for this specific user
-            List<McpSchema.Tool> userTools = mcpService.getAvailableToolsForUser(customerId);
-            if (!userTools.isEmpty()) {
-                String mcpContext = userTools.toString();
-                messages.addFirst(new SystemMessage("Available tools: " + mcpContext));
-            }
-        } catch (Exception e) {
-            log.warn("Failed to get MCP context for user: {}", customerId, e);
-        }
-
+    private Prompt createPromptWithMcpContext(List<Message> messages, String customerId, String jwtToken, Integer maxTokens) {
         // Get user-specific MCP client
         McpAsyncClient userMcpClient = mcpService.getClientForUser(customerId, jwtToken);
 
         AnthropicChatOptions.Builder optionsBuilder = AnthropicChatOptions.builder();
 
         if (userMcpClient != null) {
+            optionsBuilder.maxTokens(maxTokens != null ? maxTokens : 500);
+            optionsBuilder.temperature((double) 0);
             optionsBuilder.toolCallbacks(new AsyncMcpToolCallbackProvider(userMcpClient).getToolCallbacks());
         } else {
             log.warn("No MCP client available for user: {}", customerId);
@@ -98,10 +88,12 @@ public class ChatService {
 
             // Add current user message
             messages.add(new UserMessage(request.getMessage()));
-            messages.add(new UserMessage("Customer Id is " + customer.getCustomerId()));
+
+            // Add customer summary as assistant message
+            messages.add(new AssistantMessage(getCustomerSummary(customer.getCustomerId(), jwtToken).get("aiSummary").toString()));
 
             // Create prompt with user-specific MCP context
-            Prompt prompt = createPromptWithMcpContext(messages, request.getCustomerId(), jwtToken);
+            Prompt prompt = createPromptWithMcpContext(messages, request.getCustomerId(), jwtToken, null);
 
             // Get AI response
             ChatResponse aiResponse = anthropicChatModel.call(prompt);
@@ -111,7 +103,7 @@ public class ChatService {
             ChatMessage assistantMessage = saveAssistantMessage(conversation, responseContent, aiResponse);
 
             // Update conversation title if needed
-            updateConversationTitle(conversation, request.getMessage(), responseContent);
+            updateConversationTitle(conversation, request.getMessage());
 
             // Build response
             return com.example.mcpchat.dto.ChatResponse.builder()
@@ -213,7 +205,6 @@ public class ChatService {
     }
 
 
-
     private List<com.example.mcpchat.dto.ChatResponse.ToolCallResult> extractToolCalls(ChatResponse response) {
         // Extract tool calls from the AI response if any
         List<com.example.mcpchat.dto.ChatResponse.ToolCallResult> toolCalls = new ArrayList<>();
@@ -240,7 +231,7 @@ public class ChatService {
         return toolCalls;
     }
 
-    private void updateConversationTitle(Conversation conversation, String userMessage, String assistantResponse) {
+    private void updateConversationTitle(Conversation conversation, String userMessage) {
         if ("New Conversation".equals(conversation.getTitle()) && !userMessage.isEmpty()) {
             String title = userMessage.length() > 50 ?
                     userMessage.substring(0, 47) + "..." : userMessage;
@@ -329,6 +320,10 @@ public class ChatService {
 
     @Transactional(readOnly = true)
     public Map<String, Object> getCustomerSummary(String customerId, String jwtToken) {
+        return aiSummaryCache.get(customerId, customer -> getCustomerSummaryFromBackend(customer, jwtToken));
+    }
+
+    private Map<String, Object> getCustomerSummaryFromBackend(String customerId, String jwtToken) {
 
         Map<String, Object> summary = new HashMap<>();
 
@@ -372,60 +367,114 @@ public class ChatService {
             summary.put("mcpConnected", mcpService.isConnectedForUser(customerId));
 
             // Generate summary using AI
-            String aiSummary = generateAISummary(customerId, jwtToken, summary);
-            summary.put("aiSummary", aiSummary);
-
+            ChatResponse aiSummary = generateAISummary(customerId, jwtToken);
+            summary.put("aiSummary", cleanAndValidateSummary(aiSummary.getResult().getOutput().getText()));
+            return summary;
         } catch (Exception e) {
             log.error("Error generating customer summary for {}", customerId, e);
-            summary.put("error", "Unable to generate complete summary");
+            summary.put("aiSummary", generateFormattedFallbackSummary(customerId, summary));
         }
-
         return summary;
     }
 
-    private String generateAISummary(String customerId, String jwtToken, Map<String, Object> basicInfo) {
-        try {
-            // Create a prompt to generate customer summary
-            List<Message> messages = new ArrayList<>();
+    private ChatResponse generateAISummary(String customerId, String jwtToken) {
+        List<Message> messages = new ArrayList<>();
 
-            String systemPrompt = String.format(
-                    "You are an AI Banking Assistant for %s. Profile: %s\n\n" +
+        String systemPrompt = """
+                       You are a banking assistant. Get financial overview and create a welcome summary.
+                
+                        Format as HTML with sections:
+                        - Financial Health: Net worth, trend, main assets/debts
+                        - Account Highlights: Top accounts, balances, earnings
+                        - Upcoming Actions: Due payments, dates, amounts
+                        - Opportunities: KYC upgrades, optimizations
+                
+                        Structure:
+                        ```html
+                        <div class='space-y-4'>
+                          <h4 class='font-semibold text-gray-800 flex items-center'>
+                            <i class='fas fa-chart-line mr-2'></i>Financial Health
+                          </h4>
+                          <p class='text-gray-700'>[content]</p>
+                
+                          <h4 class='font-semibold text-gray-800 flex items-center'>
+                            <i class='fas fa-piggy-bank mr-2'></i>Account Highlights
+                          </h4>
+                          <p class='text-gray-700'>[content]</p>
+                
+                          <h4 class='font-semibold text-gray-800 flex items-center'>
+                            <i class='fas fa-calendar-alt mr-2'></i>Upcoming Actions
+                          </h4>
+                          <p class='text-gray-700'>[content]</p>
+                
+                          <h4 class='font-semibold text-gray-800 flex items-center'>
+                            <i class='fas fa-rocket mr-2'></i>Opportunities
+                          </h4>
+                          <p class='text-gray-700'>[content]</p>
+                        </div>
+                        ```
+                
+                        Colors:
+                        - Positive: text-green-600 font-semibold
+                        - Negative: text-red-600 font-semibold
+                        - Warning: text-amber-600 font-semibold
+                        - Important: strong class='text-gray-800'
+                """;
 
-                            "## PRIMARY TOOL:\n" +
-                            "Always use getFinancialOverview('%s') first - provides ALL data in one call: accounts, loans, credit cards, investments, transactions, metrics, upcoming payments.\n\n" +
+        messages.add(new SystemMessage(systemPrompt));
+        messages.add(new UserMessage("Generate personalized banking summary for me, my customer id is " + customerId));
 
-                            "## CAPABILITIES:\n" +
-                            "Accounts: balances, trends, optimizations | Transactions: spending analysis, categories, anomalies | " +
-                            "Loans: schedules, payoff strategies | Credit: utilization, rewards optimization | " +
-                            "Investments: performance, diversification | Planning: net worth, cash flow, budgets\n\n" +
+        // Use MCP context with user-specific tools
+        Prompt prompt = createPromptWithMcpContext(messages, customerId, jwtToken, 1500);
 
-                            "## RESPONSE RULES:\n" +
-                            "- Exactly 4-5 sentences with dense data: AED amounts, percentages, dates, trends\n" +
-                            "- Pack multiple insights per sentence using semicolons/commas\n" +
-                            "- Include specific numbers, account IDs, due dates, recommendations\n" +
-                            "- Start with warm greeting, end with actionable next steps\n\n" +
+        // Get AI response
+        return anthropicChatModel.call(prompt);
+    }
 
-                            "## HTML FORMAT:\n" +
-                            "Use clean HTML: <h2>, <ul>/<li>, <table>, <strong>, <p>. No inline styles. Mobile-friendly structure.",
-                    customerId, basicInfo.toString(), customerId
-            );
+    private String cleanAndValidateSummary(String summary) {
+        // Remove any markdown code blocks if AI included them
+        summary = summary.replaceAll("```html", "").replaceAll("```", "");
 
-            messages.add(new SystemMessage(systemPrompt));
-            messages.add(new UserMessage("Generate a personalized welcome summary for this customer and call tools wherever necessary."));
-
-            // Use MCP context if available
-            Prompt prompt = createPromptWithMcpContext(messages, customerId, jwtToken);
-
-            // Get AI response
-            ChatResponse aiResponse = anthropicChatModel.call(prompt);
-            return aiResponse.getResult().getOutput().getText();
-
-        } catch (Exception e) {
-            log.warn("Failed to generate AI summary for customer {}", customerId, e);
-            return String.format("Welcome back, %s! You have %s conversations with %s total messages.",
-                    basicInfo.get("displayName"),
-                    basicInfo.get("totalConversations"),
-                    basicInfo.get("totalMessages"));
+        // Ensure it starts with div container if not present
+        if (!summary.trim().startsWith("<div")) {
+            summary = "<div class='space-y-4'>" + summary + "</div>";
         }
+
+        // Fix common formatting issues
+        summary = summary.replaceAll("(?<!>)\\s*-\\s*([A-Z][^:]*:)",
+                "<h4 class='font-semibold text-gray-800 mt-4 mb-2'><i class='fas fa-info-circle mr-2'></i>$1</h4><p class='text-gray-700'>");
+
+        // Ensure paragraphs are properly closed
+        summary = summary.replaceAll("</p>\\s*([^<])", "</p><p class='text-gray-700'>$1");
+
+        return summary.trim();
+    }
+
+    private String generateFormattedFallbackSummary(String customerId, Map<String, Object> basicInfo) {
+        return String.format("""
+                        <div class='space-y-4'>
+                            <h4 class='font-semibold text-gray-800 flex items-center'>
+                                <i class='fas fa-user-circle mr-2'></i>Welcome Back
+                            </h4>
+                            <p class='text-gray-700'>Welcome back, <strong>%s</strong>! Your banking overview is ready with <span class='text-blue-600 font-semibold'>%s conversations</span> and <span class='text-green-600 font-semibold'>%s total messages</span> in your history.</p>
+                        
+                            <h4 class='font-semibold text-gray-800 flex items-center'>
+                                <i class='fas fa-tools mr-2'></i>Available Services
+                            </h4>
+                            <p class='text-gray-700'>You have access to <strong>%s banking tools</strong> for comprehensive financial management including account inquiries, transfers, payments, and financial planning.</p>
+                        
+                            <h4 class='font-semibold text-gray-800 flex items-center'>
+                                <i class='fas fa-calendar-check mr-2'></i>Account Status
+                            </h4>
+                            <p class='text-gray-700'>Member since <span class='text-blue-600 font-semibold'>%s</span> • Last active <span class='text-green-600 font-semibold'>%s</span></p>
+                        </div>
+                        """,
+                basicInfo.getOrDefault("displayName", customerId),
+                basicInfo.getOrDefault("totalConversations", "0"),
+                basicInfo.getOrDefault("totalMessages", "0"),
+                basicInfo.getOrDefault("availableToolsCount", "0"),
+                basicInfo.getOrDefault("joinedAt", "today"),
+                basicInfo.getOrDefault("lastActiveAt", "now")
+        );
     }
 }

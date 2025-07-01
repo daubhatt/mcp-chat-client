@@ -397,13 +397,57 @@
             welcomeTitle.textContent = `Welcome back, ${summary.displayName || summary.customerId}!`;
         }
 
-        // Update AI summary
+        // Update AI summary with better formatting
         const aiSummaryContent = document.getElementById('aiSummaryMainContent');
         if (aiSummaryContent) {
             if (summary.aiSummary) {
-                aiSummaryContent.innerHTML = summary.aiSummary;
+                // Clear existing content
+                aiSummaryContent.innerHTML = '';
+
+                // Create formatted container
+                const summaryContainer = document.createElement('div');
+                summaryContainer.className = 'text-white leading-relaxed';
+                summaryContainer.innerHTML = summary.aiSummary;
+
+                // Apply white text styling to all elements for dark background
+                summaryContainer.querySelectorAll('*').forEach(el => {
+                    if (el.classList.contains('text-gray-700')) {
+                        el.classList.remove('text-gray-700');
+                        el.classList.add('text-white', 'text-opacity-90');
+                    }
+                    if (el.classList.contains('text-gray-800')) {
+                        el.classList.remove('text-gray-800');
+                        el.classList.add('text-white');
+                    }
+                    // Keep color-coded elements but ensure they're visible on dark background
+                    if (el.classList.contains('text-green-600')) {
+                        el.classList.remove('text-green-600');
+                        el.classList.add('text-green-300');
+                    }
+                    if (el.classList.contains('text-red-600')) {
+                        el.classList.remove('text-red-600');
+                        el.classList.add('text-red-300');
+                    }
+                    if (el.classList.contains('text-amber-600')) {
+                        el.classList.remove('text-amber-600');
+                        el.classList.add('text-amber-300');
+                    }
+                    if (el.classList.contains('text-blue-600')) {
+                        el.classList.remove('text-blue-600');
+                        el.classList.add('text-blue-300');
+                    }
+                });
+
+                aiSummaryContent.appendChild(summaryContainer);
             } else {
-                aiSummaryContent.innerHTML = "Welcome! I'm here to help you with various tasks using the available tools. Start a conversation to see what I can do for you.";
+                aiSummaryContent.innerHTML = `
+                <div class='text-white leading-relaxed'>
+                    <h4 class='font-semibold mb-2 flex items-center'>
+                        <i class='fas fa-robot mr-2'></i>AI Assistant Ready
+                    </h4>
+                    <p>Welcome! I'm here to help you with various banking tasks using the available tools. Start a conversation to see what I can do for you.</p>
+                </div>
+            `;
             }
         }
 
