@@ -58,8 +58,7 @@ public class ChatService {
         AnthropicChatOptions.Builder optionsBuilder = AnthropicChatOptions.builder();
 
         if (userMcpClient != null) {
-            optionsBuilder.maxTokens(maxTokens != null ? maxTokens : 500);
-            optionsBuilder.temperature((double) 0);
+            optionsBuilder.maxTokens(maxTokens != null ? maxTokens : 600);
             optionsBuilder.toolCallbacks(new AsyncMcpToolCallbackProvider(userMcpClient).getToolCallbacks());
         } else {
             log.warn("No MCP client available for user: {}", customerId);
@@ -124,11 +123,20 @@ public class ChatService {
     private Message createSystemMessageWithCustomerId(String customerId) {
 
         String systemPrompt = String.format("""
-                IMPORTANT CUSTOMER CONTEXT:
-                - The current authenticated customer ID is: %s
-                - ALWAYS use this exact customer ID when calling any MCP tools
-                - This customer ID has been verified through secure JWT authentication
-                - Never use any other customer ID or generate random customer IDs
+                Customer ID: %s (use in ALL tool calls)
+                
+                You are a banking assistant. Provide concise, actionable responses to user queries.
+                You are friendly, personable and polite.
+                
+                Rules to follow:
+                1. NEVER modify URLs - copy them EXACTLY as received from tools
+                2. If tools return URLs, include them word-for-word in your response
+                3. Be direct and specific - no fluff or paraphrasing
+                4. Temperature is 0 - stick to facts only
+                5. Do not generate any URLs, only use URLs provided by tools
+                6. ALWAYS provide a response - if tool response is empty/minimal, acknowledge the user's request
+                
+                Format: [Status] → [Action needed] → [URL] (only include URL section if URL exists)
                 """, customerId);
 
         return new SystemMessage(systemPrompt);
@@ -401,7 +409,6 @@ public class ChatService {
                         - Financial Health: Net worth, trend, main assets/debts
                         - Account Highlights: Top accounts, balances, earnings
                         - Upcoming Actions: Due payments, dates, amounts
-                        - Opportunities: KYC upgrades, optimizations
                 
                         Structure:
                         ```html
@@ -439,7 +446,7 @@ public class ChatService {
         messages.add(new UserMessage("Generate personalized banking summary for me, my customer id is " + customerId));
 
         // Use MCP context with user-specific tools
-        Prompt prompt = createPromptWithMcpContext(messages, customerId, jwtToken, 1500);
+        Prompt prompt = createPromptWithMcpContext(messages, customerId, jwtToken, 800);
 
         // Get AI response
         return anthropicChatModel.call(prompt);

@@ -34,6 +34,10 @@ spring:  # Database Configuration
     # Anthropic Configuration
     anthropic:
       api-key: ${ANTHROPIC_API_KEY:sk}
+      chat:
+        options:
+          model: ${CLAUDE_MODEL_NAME:claude-3-5-haiku-latest}
+          temperature: 0.1
     # MCP Configuration
     mcp:
       clients:
@@ -51,7 +55,7 @@ spring:  # Database Configuration
 
 app:
   chat:
-    max-history-size: 50
+    max-history-size: 20
   mcp:
     custom-server:
       enabled: true
@@ -79,5 +83,7 @@ logging:
   pattern:
     console: "%clr(%d{yy-MM-dd E HH:mm:ss.SSS}){blue} %clr(%-5p) %clr(${PID}){faint} %clr(---){faint} %clr([%8.15t]){cyan} %clr(%-40.40logger{0}){blue} %clr(:){red} %clr(%m){faint}%n"
   level:
-    org.springframework.ai: INFO
-    org.springframework.web: INFO
+    org.springframework.ai: WARN
+    org.springframework.web: WARN
+    com.example.mcpchat: INFO        # Keep app logging minimal
+    io.modelcontextprotocol: WARN    # Reduce MCP logging
