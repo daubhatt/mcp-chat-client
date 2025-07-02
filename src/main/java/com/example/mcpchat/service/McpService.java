@@ -1,21 +1,19 @@
 package com.example.mcpchat.service;
 
 import com.example.mcpchat.config.McpClientConnectionFactory;
+import com.example.mcpchat.dto.UserMcpSession;
 import io.modelcontextprotocol.client.McpAsyncClient;
 import io.modelcontextprotocol.spec.McpSchema;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -34,24 +32,33 @@ public class McpService {
     @Value("${app.mcp.custom-server.reconnect-delay:5}")
     private int reconnectDelaySeconds;
 
+    @Value("${app.mcp.session.cleanup-interval:300}")
+    private int sessionCleanupIntervalSeconds;
+
+    @Value("${app.mcp.session.max-idle-time:300}")
+    private int maxIdleTimeSeconds;
+
+    @Value("${app.mcp.global-tools.enabled:false}")
+    private boolean globalToolsEnabled;
+
     @Value("${spring.ai.mcp.clients.banking-server.url}")
     private String bankingServerUrl;
 
     private final McpClientConnectionFactory mcpClientConnectionFactory;
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
-    private volatile boolean isConnected = false;
-    private volatile List<McpSchema.Tool> availableTools = new ArrayList<>();
-    @Getter
-    private McpAsyncClient bankingClient;
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(3);
+
+    // User-specific MCP sessions
+    private final Map<String, UserMcpSession> userSessions = new ConcurrentHashMap<>();
+
+    // Global tools cache (shared across users if tools are the same)
+    private volatile List<McpSchema.Tool> globalAvailableTools = new ArrayList<>();
+    private volatile boolean globalToolsLoaded = false;
 
     @PostConstruct
     public void initialize() {
         if (mcpEnabled) {
-            log.info("Initializing MCP service");
-            bankingClient = mcpClientConnectionFactory.createNewConnection(bankingServerUrl);
-            connectToMcpServer();
-            startHealthCheck();
-            //startHeartbeatCall();
+            log.info("Initializing MCP service with user-specific sessions");
+            startSessionCleanup();
         } else {
             log.info("MCP service is disabled");
         }
@@ -59,6 +66,12 @@ public class McpService {
 
     @PreDestroy
     public void cleanup() {
+        log.info("Cleaning up MCP service");
+
+        // Close all user sessions
+        userSessions.values().forEach(this::closeUserSession);
+        userSessions.clear();
+
         scheduler.shutdown();
         try {
             if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
@@ -70,25 +83,112 @@ public class McpService {
         }
     }
 
-    public List<McpSchema.Tool> getAvailableTools() {
-        return new ArrayList<>(availableTools);
+    /**
+     * Get or create MCP client for a specific user
+     */
+    public McpAsyncClient getClientForUser(String userId, String jwtToken) {
+        if (!mcpEnabled) {
+            log.warn("MCP is disabled, cannot create client for user: {}", userId);
+            return null;
+        }
+
+        UserMcpSession session = userSessions.computeIfAbsent(userId, key -> createUserSession(key, jwtToken));
+        session.updateLastAccessed();
+
+        if (session.getClient() == null || !session.isConnected()) {
+            log.info("Creating new MCP connection for user: {}", userId);
+            reconnectUserSession(session);
+        }
+
+        return session.getClient();
     }
 
-    private void connectToMcpServer() {
-        int attempts = 0;
-        while (attempts < reconnectAttempts && !isConnected) {
+    /**
+     * Get available tools (uses global cache if enabled, otherwise gets from user's client)
+     */
+    public List<McpSchema.Tool> getAvailableTools() {
+        if (globalToolsEnabled && globalToolsLoaded) {
+            return new ArrayList<>(globalAvailableTools);
+        }
+        // Return empty list if global tools disabled and no specific user context
+        return new ArrayList<>();
+    }
+
+    /**
+     * Get available tools for a specific user
+     */
+    public List<McpSchema.Tool> getAvailableToolsForUser(String userId) {
+        if (globalToolsEnabled && globalToolsLoaded) {
+            return new ArrayList<>(globalAvailableTools);
+        }
+
+        // Get tools from user's specific client
+        UserMcpSession session = userSessions.get(userId);
+        if (session != null && session.isConnected() && session.getClient() != null) {
             try {
-                log.debug("Attempting to connect to MCP server (attempt {})", attempts + 1);
+                return session.getClient().listTools()
+                        .map(McpSchema.ListToolsResult::tools)
+                        .map(ArrayList::new)
+                        .block(); // Note: blocking call, consider making async if needed
+            } catch (Exception e) {
+                log.warn("Failed to get tools for user: {}", userId, e);
+            }
+        }
 
-                loadAvailableTools();
+        return new ArrayList<>();
+    }
 
-                isConnected = true;
-                log.info("Successfully connected to MCP server");
+    /**
+     * Check if MCP is connected for a specific user
+     */
+    public boolean isConnectedForUser(String userId) {
+        UserMcpSession session = userSessions.get(userId);
+        return session != null && session.isConnected() && mcpEnabled;
+    }
+
+    /**
+     * Close session for a specific user
+     */
+    public void closeUserSession(String userId) {
+        UserMcpSession session = userSessions.remove(userId);
+        if (session != null) {
+            closeUserSession(session);
+            log.info("Closed MCP session for user: {}", userId);
+        }
+    }
+
+    /**
+     * Create a new user session
+     */
+    private UserMcpSession createUserSession(String userId, String jwtToken) {
+        log.debug("Creating new MCP session for user: {}", userId);
+        UserMcpSession session = new UserMcpSession(userId, jwtToken);
+        reconnectUserSession(session);
+        return session;
+    }
+
+    /**
+     * Reconnect a user session
+     */
+    private void reconnectUserSession(UserMcpSession session) {
+        int attempts = 0;
+        while (attempts < reconnectAttempts && !session.isConnected()) {
+            try {
+                log.debug("Attempting to connect MCP client for user: {} (attempt {})",
+                        session.getUserId(), attempts + 1);
+
+                McpAsyncClient client = mcpClientConnectionFactory.createNewConnection(bankingServerUrl, session.getJwtToken());
+                session.setClient(client);
+                session.setConnected(true);
+                session.updateLastAccessed();
+
+                log.info("Successfully connected MCP client for user: {}", session.getUserId());
                 break;
 
             } catch (Exception e) {
                 attempts++;
-                log.warn("Failed to connect to MCP server (attempt {}): {}", attempts, e.getMessage());
+                log.warn("Failed to connect MCP client for user: {} (attempt {}): {}",
+                        session.getUserId(), attempts, e.getMessage());
 
                 if (attempts < reconnectAttempts) {
                     try {
@@ -101,90 +201,56 @@ public class McpService {
             }
         }
 
-        if (!isConnected) {
-            log.error("Failed to connect to MCP server after {} attempts", reconnectAttempts);
+        if (!session.isConnected()) {
+            log.error("Failed to connect MCP client for user: {} after {} attempts",
+                    session.getUserId(), reconnectAttempts);
         }
     }
 
-    private void loadAvailableTools() {
-        bankingClient.listTools()
-                .map(McpSchema.ListToolsResult::tools)
-                .doOnNext(toolLists -> {
-                    synchronized (this) {
-                        availableTools = new ArrayList<>(toolLists);
-                    }
-                    log.info("Loaded {} tools from MCP server", availableTools.size());
-                }).doOnError(e -> {
-                    log.error("Failed to load MCP tools", e);
-                    bankingClient = mcpClientConnectionFactory.createNewConnection(bankingServerUrl);
-                    connectToMcpServer();
-                }).subscribe();
-    }
-
-    private void startHealthCheck() {
-        scheduler.scheduleWithFixedDelay(() -> {
-            if (isConnected) {
-                // Perform a simple health check by listing tools
-                bankingClient.listTools()
-                        .doOnError(ex -> {
-                            log.warn("MCP health check failed: {}", ex.getMessage());
-                            isConnected = false;
-                        })
-                        .doOnSuccess(result -> log.debug("MCP health check passed"))
-                        .subscribe();
-            } else {
-                log.debug("MCP not connected, attempting reconnection");
-                connectToMcpServer();
+    /**
+     * Close a user session
+     */
+    private void closeUserSession(UserMcpSession session) {
+        try {
+            if (session.getClient() != null) {
+                session.getClient().close();
             }
-        }, 30, 30, TimeUnit.SECONDS);
-    }
-
-    private void startHeartbeatCall() {
-        WebClient.builder().baseUrl(bankingServerUrl)
-                .build().get()
-                .uri("/heartbeat")
-                .exchangeToFlux(response -> response.bodyToFlux(String.class))
-                .doOnNext(msg -> {
-                    log.info("Received heartbeat message: {}", msg);
-                    this.isConnected = true;
-                })
-                .doOnError(err -> {
-                    log.error("Failed to connect to MCP server", err);
-                    this.isConnected = false;
-                })
-                .subscribe();
-    }
-
-    public boolean isConnected() {
-        return isConnected && mcpEnabled;
-    }
-
-    public Map<String, Object> getMcpStatus() {
-        Map<String, Object> status = new HashMap<>();
-        status.put("connected", isConnected);
-        status.put("enabled", mcpEnabled);
-        status.put("toolCount", availableTools.size());
-        status.put("tools", availableTools.stream()
-                .map(tool -> Map.of(
-                        "name", tool.name(),
-                        "description", tool.description()
-                ))
-                .toList());
-        return status;
-    }
-
-    public void refreshTools() {
-        if (isConnected()) {
-            log.info("Refreshing MCP tools");
-            loadAvailableTools();
+        } catch (Exception e) {
+            log.warn("Error closing MCP client for user: {}", session.getUserId(), e);
         }
+        session.setConnected(false);
+        session.setClient(null);
     }
 
-    public void reconnect() {
-        log.info("Manual reconnection requested");
-        isConnected = false;
-        availableTools.clear();
-        connectToMcpServer();
-    }
+    /**
+     * Start periodic cleanup of idle sessions
+     */
+    private void startSessionCleanup() {
+        scheduler.scheduleWithFixedDelay(() -> {
+            LocalDateTime cutoff = LocalDateTime.now().minusSeconds(maxIdleTimeSeconds);
 
+            List<String> toRemove = userSessions.entrySet().stream()
+                    .filter(entry -> entry.getValue().getLastAccessed().isBefore(cutoff))
+                    .map(Map.Entry::getKey)
+                    .toList();
+
+            if (!toRemove.isEmpty()) {
+                log.info("Cleaning up {} idle MCP sessions", toRemove.size());
+                toRemove.forEach(this::closeUserSession);
+            }
+
+            // Health check for remaining sessions
+            userSessions.values().forEach(session -> {
+                if (session.isConnected() && session.getClient() != null) {
+                    session.getClient().listTools()
+                            .doOnError(ex -> {
+                                log.warn("Health check failed for user: {}", session.getUserId());
+                                session.setConnected(false);
+                            })
+                            .subscribe();
+                }
+            });
+
+        }, sessionCleanupIntervalSeconds, sessionCleanupIntervalSeconds, TimeUnit.SECONDS);
+    }
 }

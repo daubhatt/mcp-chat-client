@@ -36,54 +36,32 @@
             <i class="fas fa-robot text-3xl text-indigo-600"></i>
         </div>
         <h1 class="text-3xl font-bold text-white mb-2">MCP Chat Client</h1>
-        <p class="text-white opacity-80">Enter your username to start chatting</p>
+        <p class="text-white opacity-80">Secure authentication with OAuth2</p>
     </div>
 
-    <form id="loginForm" class="space-y-6">
-        <div>
-            <label for="username" class="block text-white text-sm font-medium mb-2">
-                <i class="fas fa-user mr-2"></i>Username
-            </label>
-            <input
-                    type="text"
-                    id="username"
-                    name="username"
-                    required
-                    minlength="2"
-                    maxlength="100"
-                    class="w-full px-4 py-3 rounded-lg border border-white border-opacity-30 bg-white bg-opacity-20 text-white placeholder-white placeholder-opacity-60 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 focus:border-transparent"
-                    placeholder="Enter your username"
-            >
-        </div>
-
-        <div>
-            <label for="displayName" class="block text-white text-sm font-medium mb-2">
-                <i class="fas fa-id-card mr-2"></i>Display Name (Optional)
-            </label>
-            <input
-                    type="text"
-                    id="displayName"
-                    name="displayName"
-                    maxlength="200"
-                    class="w-full px-4 py-3 rounded-lg border border-white border-opacity-30 bg-white bg-opacity-20 text-white placeholder-white placeholder-opacity-60 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 focus:border-transparent"
-                    placeholder="Enter your display name"
-            >
-        </div>
-
+    <!-- Login Button for OAuth Authorization Code Flow -->
+    <div id="loginSection" class="space-y-6">
         <div id="errorMessage" class="hidden bg-red-500 bg-opacity-20 border border-red-500 border-opacity-50 text-white p-3 rounded-lg text-sm">
             <i class="fas fa-exclamation-triangle mr-2"></i>
             <span id="errorText"></span>
         </div>
 
         <button
-                type="submit"
-                id="loginButton"
+                id="oauthLoginButton"
                 class="w-full bg-white text-indigo-600 font-semibold py-3 px-6 rounded-lg hover:bg-opacity-90 transition duration-300 flex items-center justify-center space-x-2 shadow-lg"
         >
-            <span id="loginButtonText">Start Chatting</span>
-            <div id="loginSpinner" class="loading-spinner hidden"></div>
+            <i class="fas fa-shield-alt"></i>
+            <span>Login with OAuth2</span>
         </button>
-    </form>
+    </div>
+
+    <!-- Loading Section (shown during OAuth flow) -->
+    <div id="loadingSection" class="hidden space-y-6">
+        <div class="text-center">
+            <div class="loading-spinner mx-auto mb-4"></div>
+            <p class="text-white">Completing authentication...</p>
+        </div>
+    </div>
 
     <div class="mt-6 text-center">
         <p class="text-white text-sm opacity-80">
@@ -95,74 +73,324 @@
 <script>
     const API_BASE = '/api';
 
-    document.getElementById('loginForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
+    // OAuth configuration - hardcoded for security
+    const OAUTH_CONFIG = {
+        serverUrl: 'http://127.0.0.1:9090', // Changed to match Spring Boot server port
+        clientId: 'client',
+        clientSecret: 'secret',
+        authorizationEndpoint: '/oauth2/authorize', // Full path for Spring Boot
+        tokenEndpoint: '/oauth2/token', // Full path for Spring Boot
+        redirectUri: `${window.location.origin}`, // Keep your current redirect URI
+        responseType: 'code',
+        grantType: 'authorization_code',
+        scope: 'read write', // Added openid and profile scopes
+        codeChallengeMethod: 'S256' // PKCE method
+    };
 
-        const username = document.getElementById('username').value.trim();
-        const displayName = document.getElementById('displayName').value.trim();
+    // Initialize the application
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeApp();
+    });
 
-        if (!username) {
-            showError('Username is required');
+    function initializeApp() {
+        // Check if we're returning from OAuth authorization
+        const urlParams = new URLSearchParams(window.location.search);
+        const authCode = urlParams.get('code');
+        const state = urlParams.get('state');
+        const error = urlParams.get('error');
+
+        if (error) {
+            showError(`OAuth error: ${error}`);
+            cleanupUrl();
             return;
         }
 
-        if (username.length < 2) {
-            showError('Username must be at least 2 characters long');
+        if (authCode) {
+            // We have an authorization code, exchange it for a token
+            handleAuthorizationCallback(authCode, state);
             return;
         }
 
-        setLoading(true);
-        hideError();
+        // Check if user is already logged in
+        const currentUser = localStorage.getItem('currentUser');
+        const jwtToken = localStorage.getItem('jwtToken');
 
+        if (currentUser && jwtToken && !isTokenExpired(jwtToken)) {
+            // User is already logged in with valid token
+            window.location.href = '/chat';
+            return;
+        }
+
+        // Clean up any expired tokens
+        if (currentUser || jwtToken) {
+            clearAuthData();
+        }
+
+        // Set up OAuth login button
+        setupOAuthLogin();
+    }
+
+    function setupOAuthLogin() {
+        document.getElementById('oauthLoginButton').addEventListener('click', startOAuthFlow);
+    }
+
+    function startOAuthFlow() {
+        // Generate state parameter for CSRF protection
+        const state = generateRandomString(32);
+        localStorage.setItem('oauth_state', state);
+
+        // Generate PKCE parameters
+        const codeVerifier = generateCodeVerifier();
+
+        // Store code verifier for later use in token exchange
+        localStorage.setItem('code_verifier', codeVerifier);
+
+        // Generate code challenge (this is async due to crypto.subtle)
+        generateCodeChallenge(codeVerifier).then(codeChallenge => {
+            // Build authorization URL with PKCE
+            const authParams = new URLSearchParams({
+                response_type: OAUTH_CONFIG.responseType,
+                client_id: OAUTH_CONFIG.clientId,
+                redirect_uri: OAUTH_CONFIG.redirectUri,
+                scope: OAUTH_CONFIG.scope,
+                state: state,
+                code_challenge: codeChallenge,
+                code_challenge_method: OAUTH_CONFIG.codeChallengeMethod
+            });
+
+            // Redirect to OAuth authorization server
+            window.location.href = `${OAUTH_CONFIG.serverUrl}${OAUTH_CONFIG.authorizationEndpoint}?${authParams}`;
+        }).catch(error => {
+            console.error('Failed to generate PKCE challenge:', error);
+            showError('Failed to initiate OAuth flow. Please try again.');
+        });
+    }
+
+    async function handleAuthorizationCallback(authCode, state) {
+        showLoadingSection();
+
+        try {
+            // Verify state parameter to prevent CSRF attacks
+            const storedState = localStorage.getItem('oauth_state');
+            if (!state || state !== storedState) {
+                throw new Error('Invalid state parameter - possible CSRF attack');
+            }
+
+            // Clean up state
+            localStorage.removeItem('oauth_state');
+
+            // Exchange authorization code for access token
+            const jwtToken = await exchangeCodeForToken(authCode);
+
+            if (!jwtToken) {
+                throw new Error('Failed to obtain access token');
+            }
+
+            // Extract username from JWT token
+            const username = extractUsernameFromToken(jwtToken);
+            if (!username) {
+                throw new Error('Could not extract username from token');
+            }
+
+            // Login to our application with the JWT token
+            const sessionData = await loginWithJWT(jwtToken);
+
+            // Store session data
+            localStorage.setItem('currentUser', JSON.stringify(sessionData));
+            localStorage.setItem('jwtToken', jwtToken);
+
+            // Clean up URL and redirect to chat
+            cleanupUrl();
+            window.location.href = '/chat';
+
+        } catch (error) {
+            console.error('OAuth callback error:', error);
+            showError(error.message || 'Authentication failed. Please try again.');
+            cleanupUrl();
+            showLoginSection();
+        }
+    }
+
+    async function exchangeCodeForToken(authCode) {
+        try {
+            // Get the stored code verifier for PKCE
+            const codeVerifier = localStorage.getItem('code_verifier');
+            if (!codeVerifier) {
+                throw new Error('Code verifier not found - possible session issue');
+            }
+
+            // Clean up stored code verifier
+            localStorage.removeItem('code_verifier');
+
+            // Prepare token exchange request with PKCE
+            const tokenRequest = new URLSearchParams({
+                grant_type: OAUTH_CONFIG.grantType,
+                code: authCode,
+                redirect_uri: OAUTH_CONFIG.redirectUri,
+                code_verifier: codeVerifier,
+                client_secret: OAUTH_CONFIG.clientSecret,
+            });
+
+            // Add client secret if it's a confidential client
+            if (OAUTH_CONFIG.clientSecret && OAUTH_CONFIG.clientSecret !== 'secret') {
+                tokenRequest.append('client_secret', OAUTH_CONFIG.clientSecret);
+            }
+            const credentials = btoa(`${OAUTH_CONFIG.clientId}:${OAUTH_CONFIG.clientSecret}`);
+            const response = await fetch(`${OAUTH_CONFIG.serverUrl}${OAUTH_CONFIG.tokenEndpoint}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Accept': 'application/json',
+                    'Authorization': `Basic ${credentials}`
+                },
+                body: tokenRequest.toString()
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                let errorMessage = 'Token exchange failed';
+
+                if (response.status === 400) {
+                    errorMessage = errorData.error_description || errorData.error || 'Invalid authorization code or PKCE verification failed';
+                } else if (response.status === 401) {
+                    errorMessage = 'Invalid client credentials';
+                } else {
+                    errorMessage = `OAuth server error: ${response.status}`;
+                }
+
+                throw new Error(errorMessage);
+            }
+
+            const tokenData = await response.json();
+
+            if (!tokenData.access_token) {
+                throw new Error('No access token received');
+            }
+
+            return tokenData.access_token;
+
+        } catch (error) {
+            console.error('Token exchange error:', error);
+            if (error.message.includes('Failed to fetch')) {
+                throw new Error('Unable to connect to OAuth server. Please check your connection.');
+            }
+            throw error;
+        }
+    }
+
+    async function loginWithJWT(jwtToken) {
         try {
             const response = await fetch(`${API_BASE}/auth/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${jwtToken}`
                 },
-                body: JSON.stringify({
-                    username: username,
-                    displayName: displayName || username
-                })
+                body: JSON.stringify({})
             });
 
             if (!response.ok) {
-                const errorData = await response.text();
-                throw new Error(`Login failed: ${response.status}`);
+                const errorData = await response.json().catch(() => ({}));
+                let errorMessage = 'Login failed';
+
+                if (response.status === 401) {
+                    errorMessage = 'Invalid or expired token';
+                } else if (response.status === 400) {
+                    errorMessage = errorData.message || 'Invalid login request';
+                } else {
+                    errorMessage = `Server error: ${response.status}`;
+                }
+
+                throw new Error(errorMessage);
             }
 
-            const sessionData = await response.json();
-
-            // Store session data
-            localStorage.setItem('currentUser', JSON.stringify(sessionData));
-
-            // Redirect to chat page
-            window.location.href = '/chat';
+            return await response.json();
 
         } catch (error) {
-            console.error('Login error:', error);
-            showError('Login failed. Please try again.');
-        } finally {
-            setLoading(false);
+            console.error('Application login error:', error);
+            if (error.message.includes('Failed to fetch')) {
+                throw new Error('Unable to connect to application server.');
+            }
+            throw error;
         }
-    });
+    }
 
-    function setLoading(loading) {
-        const button = document.getElementById('loginButton');
-        const buttonText = document.getElementById('loginButtonText');
-        const spinner = document.getElementById('loginSpinner');
-
-        if (loading) {
-            button.disabled = true;
-            button.classList.add('opacity-75');
-            buttonText.textContent = 'Connecting...';
-            spinner.classList.remove('hidden');
-        } else {
-            button.disabled = false;
-            button.classList.remove('opacity-75');
-            buttonText.textContent = 'Start Chatting';
-            spinner.classList.add('hidden');
+    function extractUsernameFromToken(token) {
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            // Try different common username claims
+            return payload.sub || payload.username || payload.preferred_username || payload.user_name;
+        } catch (error) {
+            console.error('Failed to extract username from token:', error);
+            return null;
         }
+    }
+
+    function isTokenExpired(token) {
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const currentTime = Math.floor(Date.now() / 1000);
+            return payload.exp && payload.exp <= currentTime;
+        } catch (error) {
+            return true;
+        }
+    }
+
+    function generateRandomString(length) {
+        const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let result = '';
+        for (let i = 0; i < length; i++) {
+            result += characters.charAt(Math.floor(Math.random() * characters.length));
+        }
+        return result;
+    }
+
+    // PKCE helper functions
+    function generateCodeVerifier() {
+        // Generate a cryptographically random code verifier (43-128 characters)
+        const array = new Uint8Array(32);
+        crypto.getRandomValues(array);
+        return base64URLEncode(array);
+    }
+
+    function generateCodeChallenge(codeVerifier) {
+        // Create SHA256 hash of the code verifier
+        return crypto.subtle.digest('SHA-256', new TextEncoder().encode(codeVerifier))
+            .then(hashBuffer => {
+                return base64URLEncode(new Uint8Array(hashBuffer));
+            });
+    }
+
+    function base64URLEncode(array) {
+        // Convert array to base64url encoding (RFC 4648)
+        return btoa(String.fromCharCode.apply(null, array))
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=/g, '');
+    }
+
+    function cleanupUrl() {
+        // Remove OAuth parameters from URL without causing a page reload
+        const url = new URL(window.location);
+        url.search = '';
+        window.history.replaceState({}, document.title, url.toString());
+    }
+
+    function clearAuthData() {
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('jwtToken');
+        localStorage.removeItem('oauth_state');
+        localStorage.removeItem('code_verifier');
+    }
+
+    function showLoadingSection() {
+        document.getElementById('loginSection').classList.add('hidden');
+        document.getElementById('loadingSection').classList.remove('hidden');
+    }
+
+    function showLoginSection() {
+        document.getElementById('loadingSection').classList.add('hidden');
+        document.getElementById('loginSection').classList.remove('hidden');
     }
 
     function showError(message) {
@@ -176,14 +404,6 @@
         const errorDiv = document.getElementById('errorMessage');
         errorDiv.classList.add('hidden');
     }
-
-    // Check if user is already logged in
-    document.addEventListener('DOMContentLoaded', function() {
-        const currentUser = localStorage.getItem('currentUser');
-        if (currentUser) {
-            window.location.href = '/chat';
-        }
-    });
 </script>
 </body>
 </html>

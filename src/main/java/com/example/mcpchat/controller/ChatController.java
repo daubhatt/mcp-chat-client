@@ -1,16 +1,19 @@
 package com.example.mcpchat.controller;
 
-import com.example.mcpchat.dto.*;
+import com.example.mcpchat.dto.ChatRequest;
+import com.example.mcpchat.dto.ChatResponse;
+import com.example.mcpchat.dto.CustomerSession;
+import com.example.mcpchat.dto.MessageDTO;
 import com.example.mcpchat.service.ChatService;
-import com.example.mcpchat.service.McpService;
-
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
 
-import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
 
@@ -23,18 +26,21 @@ import java.util.Map;
 public class ChatController {
 
     private final ChatService chatService;
-    private final McpService mcpService;
 
     @PostMapping("/message")
-    public ResponseEntity<ChatResponse> sendMessage(@Valid @RequestBody ChatRequest request) {
-        log.debug("Received chat message from customer: {}", request.getCustomerId());
+    public ResponseEntity<ChatResponse> sendMessage(@Valid @RequestBody ChatRequest request, @AuthenticationPrincipal Jwt jwt) {
+        String customerId = jwt.getSubject();
+        log.debug("Received chat message from customer: {}", customerId);
 
         try {
             // Update customer activity
-            chatService.updateCustomerActivity(request.getCustomerId());
+            chatService.updateCustomerActivity(customerId);
+
+            // Set the customer ID from JWT
+            request.setCustomerId(customerId);
 
             // Process the message
-            ChatResponse response = chatService.processMessage(request);
+            ChatResponse response = chatService.processMessage(request, jwt.getTokenValue());
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
@@ -46,8 +52,9 @@ public class ChatController {
         }
     }
 
-    @GetMapping("/session/{customerId}")
-    public ResponseEntity<CustomerSession> getCustomerSession(@PathVariable String customerId) {
+    @GetMapping("/session")
+    public ResponseEntity<CustomerSession> getCustomerSession(@AuthenticationPrincipal Jwt jwt) {
+        String customerId = jwt.getSubject();
         log.debug("Getting session for customer: {}", customerId);
 
         CustomerSession session = chatService.getCustomerSession(customerId);
@@ -59,7 +66,7 @@ public class ChatController {
     }
 
     @GetMapping("/conversation/{conversationId}/messages")
-    public ResponseEntity<List<MessageDTO>> getConversationMessages(@PathVariable String conversationId) {
+    public ResponseEntity<List<MessageDTO>> getConversationMessages(@PathVariable String conversationId, @AuthenticationPrincipal Jwt jwt) {
         log.debug("Getting messages for conversation: {}", conversationId);
 
         List<MessageDTO> messages = chatService.getConversationMessages(conversationId);
@@ -69,7 +76,8 @@ public class ChatController {
     @DeleteMapping("/conversation/{conversationId}")
     public ResponseEntity<Void> deleteConversation(
             @PathVariable String conversationId,
-            @RequestParam String customerId) {
+            @AuthenticationPrincipal Jwt jwt) {
+        String customerId = jwt.getSubject();
         log.debug("Deleting conversation: {} for customer: {}", conversationId, customerId);
 
         try {
@@ -80,30 +88,17 @@ public class ChatController {
         }
     }
 
-    @GetMapping("/mcp/status")
-    public ResponseEntity<Map<String, Object>> getMcpStatus() {
-        return ResponseEntity.ok(mcpService.getMcpStatus());
-    }
+    @GetMapping("/summary")
+    public ResponseEntity<Map<String, Object>> getCustomerSummary(@AuthenticationPrincipal Jwt jwt) {
+        String customerId = jwt.getSubject();
+        log.debug("Getting customer summary for: {}", customerId);
 
-    @PostMapping("/mcp/reconnect")
-    public ResponseEntity<Map<String, String>> reconnectMcp() {
         try {
-            mcpService.reconnect();
-            return ResponseEntity.ok(Map.of("status", "reconnection initiated"));
+            Map<String, Object> summary = chatService.getCustomerSummary(customerId, jwt.getTokenValue());
+            return ResponseEntity.ok(summary);
         } catch (Exception e) {
-            return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "Failed to reconnect: " + e.getMessage()));
-        }
-    }
-
-    @PostMapping("/mcp/refresh-tools")
-    public ResponseEntity<Map<String, Object>> refreshMcpTools() {
-        try {
-            mcpService.refreshTools();
-            return ResponseEntity.ok(mcpService.getMcpStatus());
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "Failed to refresh tools: " + e.getMessage()));
+            log.error("Error getting customer summary", e);
+            return ResponseEntity.internalServerError().build();
         }
     }
 }
