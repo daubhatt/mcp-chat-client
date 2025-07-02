@@ -30,7 +30,7 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<CustomerSession> login(@Valid @RequestBody LoginRequest request, @AuthenticationPrincipal Jwt jwt) {
-        log.info("Login request: {}", jwt.getTokenValue());
+        log.info("Login request from JWT subject: {}", jwt.getSubject());
         String authenticatedUsername = jwt.getSubject();
         try {
             mcpService.closeUserSession(authenticatedUsername);

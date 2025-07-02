@@ -1,6 +1,5 @@
 package com.example.mcpchat.controller;
 
-import com.example.mcpchat.config.AiSummaryCache;
 import com.example.mcpchat.dto.ChatRequest;
 import com.example.mcpchat.dto.ChatResponse;
 import com.example.mcpchat.dto.CustomerSession;
@@ -30,11 +29,15 @@ public class ChatController {
 
     @PostMapping("/message")
     public ResponseEntity<ChatResponse> sendMessage(@Valid @RequestBody ChatRequest request, @AuthenticationPrincipal Jwt jwt) {
-        log.debug("Received chat message from customer: {}", request.getCustomerId());
+        String customerId = jwt.getSubject();
+        log.debug("Received chat message from customer: {}", customerId);
 
         try {
             // Update customer activity
-            chatService.updateCustomerActivity(request.getCustomerId());
+            chatService.updateCustomerActivity(customerId);
+
+            // Set the customer ID from JWT
+            request.setCustomerId(customerId);
 
             // Process the message
             ChatResponse response = chatService.processMessage(request, jwt.getTokenValue());
@@ -49,8 +52,9 @@ public class ChatController {
         }
     }
 
-    @GetMapping("/session/{customerId}")
-    public ResponseEntity<CustomerSession> getCustomerSession(@PathVariable String customerId, @AuthenticationPrincipal Jwt jwt) {
+    @GetMapping("/session")
+    public ResponseEntity<CustomerSession> getCustomerSession(@AuthenticationPrincipal Jwt jwt) {
+        String customerId = jwt.getSubject();
         log.debug("Getting session for customer: {}", customerId);
 
         CustomerSession session = chatService.getCustomerSession(customerId);
@@ -72,7 +76,8 @@ public class ChatController {
     @DeleteMapping("/conversation/{conversationId}")
     public ResponseEntity<Void> deleteConversation(
             @PathVariable String conversationId,
-            @RequestParam String customerId) {
+            @AuthenticationPrincipal Jwt jwt) {
+        String customerId = jwt.getSubject();
         log.debug("Deleting conversation: {} for customer: {}", conversationId, customerId);
 
         try {
@@ -83,12 +88,13 @@ public class ChatController {
         }
     }
 
-    @GetMapping("/summary/{customerId}")
-    public ResponseEntity<Map<String, Object>> getCustomerSummary(@PathVariable String customerId, @AuthenticationPrincipal Jwt jwt) {
+    @GetMapping("/summary")
+    public ResponseEntity<Map<String, Object>> getCustomerSummary(@AuthenticationPrincipal Jwt jwt) {
+        String customerId = jwt.getSubject();
         log.debug("Getting customer summary for: {}", customerId);
 
         try {
-            Map<String, Object> summary =  chatService.getCustomerSummary(customerId, jwt.getTokenValue());
+            Map<String, Object> summary = chatService.getCustomerSummary(customerId, jwt.getTokenValue());
             return ResponseEntity.ok(summary);
         } catch (Exception e) {
             log.error("Error getting customer summary", e);

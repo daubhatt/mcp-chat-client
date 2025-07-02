@@ -61,6 +61,21 @@
                 transform: translateX(0);
             }
         }
+        /* URL link styles */
+        .message-content a {
+            color: #3b82f6;
+            text-decoration: underline;
+        }
+        .message-content a:hover {
+            color: #1d4ed8;
+        }
+        /* Hide message input on summary page */
+        .summary-mode .message-input-container {
+            display: none !important;
+        }
+        .summary-mode .messages-container {
+            height: calc(100% - 80px) !important;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -80,10 +95,10 @@
                 </button>
             </div>
 
-            <!-- New Conversation Button -->
+            <!-- Start Conversation Button -->
             <button id="newConversationBtn" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition duration-200 flex items-center justify-center space-x-2 mb-4">
                 <i class="fas fa-plus"></i>
-                <span>New Conversation</span>
+                <span>Start Conversation</span>
             </button>
 
             <!-- Back to Dashboard Button (in sidebar) -->
@@ -222,7 +237,7 @@
                         <div class="text-center mt-8">
                             <button id="startNewConversationBtn" class="bg-indigo-600 text-white px-8 py-3 rounded-lg hover:bg-indigo-700 transition duration-200 flex items-center justify-center space-x-2 mx-auto">
                                 <i class="fas fa-plus"></i>
-                                <span>Start New Conversation</span>
+                                <span>Start Conversation</span>
                             </button>
                         </div>
                     </div>
@@ -252,7 +267,7 @@
         </div>
 
         <!-- Message Input -->
-        <div class="bg-white border-t border-gray-200 p-4">
+        <div class="bg-white border-t border-gray-200 p-4 message-input-container">
             <form id="messageForm" class="flex space-x-3">
                 <div class="flex-1 relative">
                     <textarea
@@ -300,6 +315,7 @@
     let currentConversationId = null;
     let conversations = [];
     let isTyping = false;
+    let isSummaryMode = true; // Track if we're in summary mode
 
     // Initialize the application
     document.addEventListener('DOMContentLoaded', function() {
@@ -331,7 +347,7 @@
 
     async function loadUserSession() {
         try {
-            const response = await fetch(`${API_BASE}/chat/session/${currentUser.customerId}`, {
+            const response = await fetch(`${API_BASE}/chat/session`, {
                 headers: getAuthHeaders()
             });
 
@@ -344,12 +360,6 @@
                 const sessionData = await response.json();
                 conversations = sessionData.conversations || [];
                 renderConversations();
-
-                // Don't auto-load the latest conversation - keep showing summary
-                // Only auto-load if we're in a specific conversation context
-                // if (sessionData.currentConversationId) {
-                //     await loadConversation(sessionData.currentConversationId);
-                // }
             } else {
                 console.warn('Failed to load user session');
             }
@@ -361,7 +371,7 @@
     async function loadCustomerSummary() {
         console.log('Loading customer summary...');
         try {
-            const response = await fetch(`${API_BASE}/chat/summary/${currentUser.customerId}`, {
+            const response = await fetch(`${API_BASE}/chat/summary`, {
                 headers: getAuthHeaders()
             });
 
@@ -374,7 +384,6 @@
                 const summary = await response.json();
                 console.log('Customer summary loaded successfully');
 
-                // Use setTimeout to ensure this runs after any other DOM updates
                 setTimeout(() => {
                     renderCustomerSummaryMain(summary);
                 }, 10);
@@ -401,10 +410,8 @@
         const aiSummaryContent = document.getElementById('aiSummaryMainContent');
         if (aiSummaryContent) {
             if (summary.aiSummary) {
-                // Clear existing content
                 aiSummaryContent.innerHTML = '';
 
-                // Create formatted container
                 const summaryContainer = document.createElement('div');
                 summaryContainer.className = 'text-white leading-relaxed';
                 summaryContainer.innerHTML = summary.aiSummary;
@@ -419,7 +426,6 @@
                         el.classList.remove('text-gray-800');
                         el.classList.add('text-white');
                     }
-                    // Keep color-coded elements but ensure they're visible on dark background
                     if (el.classList.contains('text-green-600')) {
                         el.classList.remove('text-green-600');
                         el.classList.add('text-green-300');
@@ -464,13 +470,10 @@
         if (memberSince) memberSince.textContent = summary.joinedAt || 'Today';
         if (lastActiveTime) lastActiveTime.textContent = `Last active: ${summary.lastActiveAt || 'Now'}`;
 
-        // Render tools
-        renderToolsList(summary.availableTools || []);
-
         // Render recent activity
         renderRecentActivity();
 
-        // FORCE show the summary and hide default welcome
+        // Show the summary and hide default welcome
         const summaryMain = document.getElementById('customerSummaryMain');
         const defaultWelcome = document.getElementById('defaultWelcome');
 
@@ -490,34 +493,12 @@
         document.getElementById('deleteConversationBtn').classList.add('hidden');
         document.getElementById('backToSummaryBtn').classList.add('hidden');
 
+        // Enable summary mode
+        isSummaryMode = true;
+        updateSummaryMode();
+
         // Ensure we stay in summary mode
         currentConversationId = null;
-    }
-
-    function renderToolsList(tools) {
-        const toolsList = document.getElementById('toolsList');
-
-        if (tools.length === 0) {
-            toolsList.innerHTML = `
-                <div class="col-span-2 text-center text-gray-500 py-4">
-                    <i class="fas fa-tools text-2xl mb-2"></i>
-                    <p>No tools currently available</p>
-                </div>
-            `;
-            return;
-        }
-
-        toolsList.innerHTML = tools.map(tool => `
-            <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                <div class="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <i class="fas fa-cog text-indigo-600 text-sm"></i>
-                </div>
-                <div class="flex-1">
-                    <div class="font-medium text-sm text-gray-800">${escapeHtml(tool.name)}</div>
-                    <div class="text-xs text-gray-600 mt-1">${escapeHtml(tool.description)}</div>
-                </div>
-            </div>
-        `).join('');
     }
 
     function renderRecentActivity() {
@@ -570,21 +551,20 @@
         }
 
         document.getElementById('conversationTitle').textContent = 'Welcome to MCP Chat';
+
+        // Enable summary mode for default welcome too
+        isSummaryMode = true;
+        updateSummaryMode();
     }
 
-    // Show summary by default with loading state
     function showSummaryViewWithLoading() {
-        // Update conversation title immediately
         document.getElementById('conversationTitle').textContent = 'Account Overview';
-
-        // Hide navigation buttons since we're in summary
         document.getElementById('deleteConversationBtn').classList.add('hidden');
         document.getElementById('backToSummaryBtn').classList.add('hidden');
-
-        // Ensure we're not in a conversation
         currentConversationId = null;
+        isSummaryMode = true;
+        updateSummaryMode();
 
-        // Show the summary view
         const summaryMain = document.getElementById('customerSummaryMain');
         const defaultWelcome = document.getElementById('defaultWelcome');
 
@@ -597,7 +577,6 @@
             console.log('Default welcome hidden');
         }
 
-        // Show loading state in AI summary
         const aiSummaryContent = document.getElementById('aiSummaryMainContent');
         if (aiSummaryContent) {
             aiSummaryContent.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Loading your personalized summary...';
@@ -607,7 +586,6 @@
     function showSummaryView() {
         console.log('showSummaryView() called - returning to dashboard');
 
-        // Clear the messages area completely and rebuild summary
         const messagesArea = document.getElementById('messagesArea');
         messagesArea.innerHTML = `
             <!-- Customer Summary (shown by default) -->
@@ -681,20 +659,6 @@
                         </div>
                     </div>
 
-                    <!-- Available Tools Section -->
-                    <div id="toolsSection" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-                        <div class="flex items-center space-x-2 mb-4">
-                            <i class="fas fa-toolbox text-gray-600"></i>
-                            <h3 class="text-lg font-semibold text-gray-800">Available Tools</h3>
-                        </div>
-                        <div id="toolsList" class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div class="col-span-2 text-center text-gray-500 py-4">
-                                <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
-                                <p>Loading available tools...</p>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Recent Activity -->
                     <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                         <div class="flex items-center justify-between mb-4">
@@ -716,7 +680,7 @@
                     <div class="text-center mt-8">
                         <button id="startNewConversationBtn" class="bg-indigo-600 text-white px-8 py-3 rounded-lg hover:bg-indigo-700 transition duration-200 flex items-center justify-center space-x-2 mx-auto">
                             <i class="fas fa-plus"></i>
-                            <span>Start New Conversation</span>
+                            <span>Start Conversation</span>
                         </button>
                     </div>
                 </div>
@@ -734,54 +698,51 @@
             </div>
         `;
 
-        // Update header and navigation state
         document.getElementById('conversationTitle').textContent = 'Account Overview';
         document.getElementById('deleteConversationBtn').classList.add('hidden');
         document.getElementById('backToSummaryBtn').classList.add('hidden');
         currentConversationId = null;
+        isSummaryMode = true;
+        updateSummaryMode();
 
-        // Re-bind the event listener for the new button
         const newConvBtn = document.getElementById('startNewConversationBtn');
         if (newConvBtn) {
             newConvBtn.addEventListener('click', startNewConversation);
         }
 
-        // Load fresh data
         loadCustomerSummary();
         renderConversations();
 
         console.log('Summary view recreated successfully');
     }
 
+    function updateSummaryMode() {
+        const mainChatArea = document.getElementById('mainChatArea');
+        if (isSummaryMode) {
+            mainChatArea.classList.add('summary-mode');
+        } else {
+            mainChatArea.classList.remove('summary-mode');
+        }
+    }
+
     function setupEventListeners() {
-        // Message form submission
         document.getElementById('messageForm').addEventListener('submit', handleMessageSubmit);
 
-        // Message input changes
         const messageInput = document.getElementById('messageInput');
         messageInput.addEventListener('input', handleInputChange);
         messageInput.addEventListener('keydown', handleKeyDown);
 
-        // New conversation button
         document.getElementById('newConversationBtn').addEventListener('click', startNewConversation);
 
-        // Start new conversation from summary
         const startBtn = document.getElementById('startNewConversationBtn');
         if (startBtn) {
             startBtn.addEventListener('click', startNewConversation);
         }
 
-        // Back to summary buttons
         document.getElementById('backToSummaryBtn').addEventListener('click', showSummaryView);
         document.getElementById('backToDashboardBtn').addEventListener('click', showSummaryView);
-
-        // Logout button
         document.getElementById('logoutBtn').addEventListener('click', handleLogout);
-
-        // Delete conversation button
         document.getElementById('deleteConversationBtn').addEventListener('click', handleDeleteConversation);
-
-        // Sidebar toggle for mobile
         document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
         document.getElementById('sidebarOverlay').addEventListener('click', closeSidebar);
     }
@@ -813,6 +774,11 @@
     async function handleMessageSubmit(e) {
         e.preventDefault();
 
+        // Prevent sending messages in summary mode
+        if (isSummaryMode) {
+            return;
+        }
+
         const messageInput = document.getElementById('messageInput');
         const message = messageInput.value.trim();
 
@@ -829,7 +795,6 @@
                 method: 'POST',
                 headers: getAuthHeaders(),
                 body: JSON.stringify({
-                    customerId: currentUser.customerId,
                     message: message,
                     conversationId: currentConversationId,
                     newConversation: currentConversationId === null
@@ -872,11 +837,14 @@
         const messagesArea = document.getElementById('messagesArea');
         const messageDiv = document.createElement('div');
 
+        // Convert URLs to clickable links
+        const processedContent = makeUrlsClickable(content);
+
         if (type === 'user') {
             messageDiv.className = 'flex justify-end';
             messageDiv.innerHTML = `
                 <div class="message-bubble bg-indigo-600 text-white p-3 rounded-lg rounded-br-none">
-                    <div class="message-content">${escapeHtml(content)}</div>
+                    <div class="message-content">${processedContent}</div>
                     <div class="text-xs opacity-75 mt-1">${new Date().toLocaleTimeString()}</div>
                 </div>
             `;
@@ -888,7 +856,7 @@
                         <i class="fas fa-robot text-sm text-gray-600"></i>
                     </div>
                     <div class="message-bubble bg-white border border-gray-200 p-3 rounded-lg rounded-bl-none">
-                        <div class="message-content">${escapeHtml(content)}</div>
+                        <div class="message-content">${processedContent}</div>
                         <div class="text-xs text-gray-500 mt-1">${new Date().toLocaleTimeString()}</div>
                     </div>
                 </div>
@@ -897,13 +865,32 @@
             messageDiv.className = 'flex justify-center';
             messageDiv.innerHTML = `
                 <div class="bg-yellow-100 border border-yellow-200 text-yellow-800 p-2 rounded text-sm">
-                    ${escapeHtml(content)}
+                    ${processedContent}
                 </div>
             `;
         }
 
         messagesArea.appendChild(messageDiv);
         scrollToBottom();
+    }
+
+    function makeUrlsClickable(text) {
+        // URL regex pattern that matches http, https, and www URLs
+        const urlRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)|(\b[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b(?:\/[^\s]*)?)/g;
+
+        return escapeHtml(text).replace(urlRegex, function(url) {
+            let href = url;
+
+            // Add protocol if missing
+            if (url.startsWith('www.')) {
+                href = 'https://' + url;
+            } else if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                // For domain-only URLs like "example.com"
+                href = 'https://' + url;
+            }
+
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+        });
     }
 
     function showTypingIndicator() {
@@ -937,7 +924,6 @@
             return;
         }
 
-        // Don't highlight any conversation if we're in summary view
         const highlightId = currentConversationId;
 
         conversationsList.innerHTML = conversations.map(conv => `
@@ -949,7 +935,6 @@
             </div>
         `).join('');
 
-        // Add click listeners to conversation items
         conversationsList.querySelectorAll('.conversation-item').forEach(item => {
             item.addEventListener('click', () => {
                 const conversationId = item.dataset.conversationId;
@@ -961,11 +946,13 @@
     async function loadConversation(conversationId) {
         try {
             currentConversationId = conversationId;
+            isSummaryMode = false;
+            updateSummaryMode();
+
             document.getElementById('conversationTitle').textContent = 'Loading...';
             document.getElementById('deleteConversationBtn').classList.remove('hidden');
             document.getElementById('backToSummaryBtn').classList.remove('hidden');
 
-            // Clear the messages area and hide summary
             document.getElementById('messagesArea').innerHTML = '';
 
             const response = await fetch(`${API_BASE}/chat/conversation/${conversationId}/messages`, {
@@ -1002,13 +989,15 @@
         }
     }
 
-    // Function to load conversation from summary page
     window.loadConversationFromSummary = function(conversationId) {
         loadConversation(conversationId);
     }
 
     function startNewConversation() {
         currentConversationId = null;
+        isSummaryMode = false;
+        updateSummaryMode();
+
         document.getElementById('conversationTitle').textContent = 'New Conversation';
         document.getElementById('deleteConversationBtn').classList.add('hidden');
         document.getElementById('backToSummaryBtn').classList.remove('hidden');
@@ -1036,7 +1025,7 @@
         }
 
         try {
-            const response = await fetch(`${API_BASE}/chat/conversation/${currentConversationId}?customerId=${currentUser.customerId}`, {
+            const response = await fetch(`${API_BASE}/chat/conversation/${currentConversationId}`, {
                 method: 'DELETE',
                 headers: getAuthHeaders()
             });
@@ -1048,8 +1037,8 @@
 
             if (response.ok) {
                 await loadUserSession();
-                await loadCustomerSummary(); // Refresh summary after deletion
-                showSummaryView(); // Return to summary view
+                await loadCustomerSummary();
+                showSummaryView();
             } else {
                 alert('Failed to delete conversation. Please try again.');
             }
@@ -1068,7 +1057,7 @@
 
     async function handleLogout() {
         try {
-            await fetch(`${API_BASE}/auth/logout?customerId=${currentUser.customerId}`, {
+            await fetch(`${API_BASE}/auth/logout`, {
                 method: 'POST',
                 headers: getAuthHeaders()
             });

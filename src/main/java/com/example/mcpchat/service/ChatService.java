@@ -89,6 +89,7 @@ public class ChatService {
             // Add current user message
             messages.add(new UserMessage(request.getMessage()));
 
+            messages.add(createSystemMessageWithCustomerId(request.getCustomerId()));
             // Add customer summary as assistant message
             messages.add(new AssistantMessage(getCustomerSummary(customer.getCustomerId(), jwtToken).get("aiSummary").toString()));
 
@@ -118,6 +119,19 @@ public class ChatService {
             log.error("Error processing chat message", e);
             throw new RuntimeException("Failed to process message: " + e.getMessage(), e);
         }
+    }
+
+    private Message createSystemMessageWithCustomerId(String customerId) {
+
+        String systemPrompt = String.format("""
+                IMPORTANT CUSTOMER CONTEXT:
+                - The current authenticated customer ID is: %s
+                - ALWAYS use this exact customer ID when calling any MCP tools
+                - This customer ID has been verified through secure JWT authentication
+                - Never use any other customer ID or generate random customer IDs
+                """, customerId);
+
+        return new SystemMessage(systemPrompt);
     }
 
     private Customer getOrCreateCustomer(String customerId) {

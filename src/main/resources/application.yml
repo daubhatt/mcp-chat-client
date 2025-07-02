@@ -34,7 +34,6 @@ spring:  # Database Configuration
     # Anthropic Configuration
     anthropic:
       api-key: ${ANTHROPIC_API_KEY:sk}
-
     # MCP Configuration
     mcp:
       clients:

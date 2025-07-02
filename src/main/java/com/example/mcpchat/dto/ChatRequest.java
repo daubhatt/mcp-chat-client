@@ -13,8 +13,7 @@ import jakarta.validation.constraints.Size;
 @AllArgsConstructor
 @Builder
 public class ChatRequest {
-    @NotBlank(message = "Customer ID is required")
-    @Size(max = 100, message = "Customer ID must be less than 100 characters")
+    // Customer ID will be set from JWT, no longer required in request
     private String customerId;
 
     @NotBlank(message = "Message is required")
