@@ -376,7 +376,7 @@ public class ChatService {
             summary.put("totalMessages", totalMessages);
 
             // Get available MCP tools
-            List<McpSchema.Tool> availableTools = mcpService.getAvailableToolsForUser(customerId);
+            List<McpSchema.Tool> availableTools = mcpService.getAvailableToolsForUser(customerId, jwtToken);
             summary.put("availableToolsCount", availableTools.size());
             summary.put("availableTools", availableTools.stream()
                     .map(tool -> Map.of(

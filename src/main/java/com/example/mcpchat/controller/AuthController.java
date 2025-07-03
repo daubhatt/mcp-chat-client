@@ -33,7 +33,6 @@ public class AuthController {
         log.info("Login request from JWT subject: {}", jwt.getSubject());
         String authenticatedUsername = jwt.getSubject();
         try {
-            mcpService.closeUserSession(authenticatedUsername);
             // Get or create customer session
             CustomerSession session = chatService.getCustomerSession(authenticatedUsername);
 

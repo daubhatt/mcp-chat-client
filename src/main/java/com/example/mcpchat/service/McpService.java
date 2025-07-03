@@ -10,7 +10,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import reactor.util.retry.Retry;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,9 +24,6 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 @Slf4j
 public class McpService {
-
-    @Value("${app.mcp.custom-server.enabled:true}")
-    private boolean mcpEnabled;
 
     @Value("${app.mcp.custom-server.reconnect-attempts:3}")
     private int reconnectAttempts;
@@ -56,12 +55,7 @@ public class McpService {
 
     @PostConstruct
     public void initialize() {
-        if (mcpEnabled) {
-            log.info("Initializing MCP service with user-specific sessions");
-            startSessionCleanup();
-        } else {
-            log.info("MCP service is disabled");
-        }
+        startSessionCleanup();
     }
 
     @PreDestroy
@@ -87,10 +81,6 @@ public class McpService {
      * Get or create MCP client for a specific user
      */
     public McpAsyncClient getClientForUser(String userId, String jwtToken) {
-        if (!mcpEnabled) {
-            log.warn("MCP is disabled, cannot create client for user: {}", userId);
-            return null;
-        }
 
         UserMcpSession session = userSessions.computeIfAbsent(userId, key -> createUserSession(key, jwtToken));
         session.updateLastAccessed();
@@ -117,25 +107,38 @@ public class McpService {
     /**
      * Get available tools for a specific user
      */
-    public List<McpSchema.Tool> getAvailableToolsForUser(String userId) {
+    public List<McpSchema.Tool> getAvailableToolsForUser(String userId, String jwtToken) {
         if (globalToolsEnabled && globalToolsLoaded) {
             return new ArrayList<>(globalAvailableTools);
         }
 
         // Get tools from user's specific client
         UserMcpSession session = userSessions.get(userId);
-        if (session != null && session.isConnected() && session.getClient() != null) {
-            try {
-                return session.getClient().listTools()
-                        .map(McpSchema.ListToolsResult::tools)
-                        .map(ArrayList::new)
-                        .block(); // Note: blocking call, consider making async if needed
-            } catch (Exception e) {
-                log.warn("Failed to get tools for user: {}", userId, e);
-            }
+        if (session == null) {
+            log.warn("No MCP session found for user: {}", userId);
+            session = createUserSession(userId, jwtToken);
         }
-
+        if (session.isConnected() && session.getClient() != null) {
+            return getSessionTools(session);
+        }
         return new ArrayList<>();
+    }
+
+    private ArrayList<McpSchema.Tool> getSessionTools(UserMcpSession session) {
+        return session.getClient().listTools()
+                .map(McpSchema.ListToolsResult::tools)
+                .map(ArrayList::new)
+                .retryWhen(Retry.backoff(3, Duration.ofSeconds(1))
+                        .doBeforeRetry(retrySignal -> {
+                            log.warn("Retry attempt {} for listTools", retrySignal.totalRetries() + 1);
+                            session.setConnected(false);
+                            reconnectUserSession(session);
+                        })
+                        .onRetryExhaustedThrow((retryBackoffSpec, retrySignal) ->
+                                new RuntimeException("Failed to get session tools after retries", retrySignal.failure())
+                        )
+                )
+                .block();
     }
 
     /**
@@ -143,7 +146,7 @@ public class McpService {
      */
     public boolean isConnectedForUser(String userId) {
         UserMcpSession session = userSessions.get(userId);
-        return session != null && session.isConnected() && mcpEnabled;
+        return session != null && session.isConnected();
     }
 
     /**
@@ -155,6 +158,21 @@ public class McpService {
             closeUserSession(session);
             log.info("Closed MCP session for user: {}", userId);
         }
+    }
+
+    /**
+     * Close a user session
+     */
+    private void closeUserSession(UserMcpSession session) {
+        try {
+            if (session.getClient() != null) {
+                session.getClient().close();
+            }
+        } catch (Exception e) {
+            log.warn("Error closing MCP client for user: {}", session.getUserId(), e);
+        }
+        session.setConnected(false);
+        session.setClient(null);
     }
 
     /**
@@ -205,21 +223,6 @@ public class McpService {
             log.error("Failed to connect MCP client for user: {} after {} attempts",
                     session.getUserId(), reconnectAttempts);
         }
-    }
-
-    /**
-     * Close a user session
-     */
-    private void closeUserSession(UserMcpSession session) {
-        try {
-            if (session.getClient() != null) {
-                session.getClient().close();
-            }
-        } catch (Exception e) {
-            log.warn("Error closing MCP client for user: {}", session.getUserId(), e);
-        }
-        session.setConnected(false);
-        session.setClient(null);
     }
 
     /**
