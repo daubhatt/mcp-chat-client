@@ -376,15 +376,16 @@ public class ChatService {
             summary.put("totalMessages", totalMessages);
 
             // Get available MCP tools
-            List<McpSchema.Tool> availableTools = mcpService.getAvailableToolsForUser(customerId, jwtToken);
-            summary.put("availableToolsCount", availableTools.size());
-            summary.put("availableTools", availableTools.stream()
-                    .map(tool -> Map.of(
-                            "name", tool.name(),
-                            "description", tool.description()
-                    ))
-                    .collect(Collectors.toList()));
-
+            mcpService.getAvailableToolsForUser(customerId, jwtToken)
+                    .doOnSuccess(availableTools -> {
+                        summary.put("availableToolsCount", availableTools.size());
+                        summary.put("availableTools", availableTools.stream()
+                                .map(tool -> Map.of(
+                                        "name", tool.name(),
+                                        "description", tool.description()
+                                ))
+                                .collect(Collectors.toList()));
+                    }).subscribe();
             // Check MCP connection status
             summary.put("mcpConnected", mcpService.isConnectedForUser(customerId));
 

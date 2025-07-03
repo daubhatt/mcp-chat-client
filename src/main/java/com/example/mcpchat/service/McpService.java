@@ -95,7 +95,7 @@ public class McpService {
     /**
      * Get available tools for a specific user
      */
-    public List<McpSchema.Tool> getAvailableToolsForUser(String userId, String jwtToken) {
+    public Mono<List<McpSchema.Tool>> getAvailableToolsForUser(String userId, String jwtToken) {
 
         // Get tools from user's specific client
         UserMcpSession session = userSessions.get(userId);
@@ -106,17 +106,16 @@ public class McpService {
         if (session.isConnected() && session.getClient() != null) {
             return getSessionTools(session);
         }
-        return new ArrayList<>();
+        return Mono.empty();
     }
 
-    private ArrayList<McpSchema.Tool> getSessionTools(UserMcpSession session) {
+    private Mono<List<McpSchema.Tool>> getSessionTools(UserMcpSession session) {
         AtomicReference<UserMcpSession> sessionRef = new AtomicReference<>(session);
 
         return Mono.defer(() -> {
                     // Client is resolved fresh on each attempt
                     return sessionRef.get().getClient().listTools()
-                            .map(McpSchema.ListToolsResult::tools)
-                            .map(ArrayList::new);
+                            .map(McpSchema.ListToolsResult::tools);
                 })
                 .retryWhen(Retry.backoff(3, Duration.ofSeconds(1))
                         .doBeforeRetry(retrySignal -> {
@@ -129,8 +128,7 @@ public class McpService {
                         .onRetryExhaustedThrow((retryBackoffSpec, retrySignal) ->
                                 new RuntimeException("Failed to get session tools after retries", retrySignal.failure())
                         )
-                )
-                .block();
+                );
     }
 
     /**
