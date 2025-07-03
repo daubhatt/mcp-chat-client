@@ -10,6 +10,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
 import java.time.Duration;
@@ -26,20 +28,11 @@ import java.util.concurrent.atomic.AtomicReference;
 @Slf4j
 public class McpService {
 
-    @Value("${app.mcp.custom-server.reconnect-attempts:3}")
-    private int reconnectAttempts;
-
-    @Value("${app.mcp.custom-server.reconnect-delay:5}")
-    private int reconnectDelaySeconds;
-
     @Value("${app.mcp.session.cleanup-interval:300}")
     private int sessionCleanupIntervalSeconds;
 
     @Value("${app.mcp.session.max-idle-time:300}")
     private int maxIdleTimeSeconds;
-
-    @Value("${app.mcp.global-tools.enabled:false}")
-    private boolean globalToolsEnabled;
 
     @Value("${spring.ai.mcp.clients.banking-server.url}")
     private String bankingServerUrl;
@@ -50,13 +43,18 @@ public class McpService {
     // User-specific MCP sessions
     private final Map<String, UserMcpSession> userSessions = new ConcurrentHashMap<>();
 
-    // Global tools cache (shared across users if tools are the same)
-    private volatile List<McpSchema.Tool> globalAvailableTools = new ArrayList<>();
-    private volatile boolean globalToolsLoaded = false;
-
     @PostConstruct
     public void initialize() {
         startSessionCleanup();
+        startHeartbeatCall();
+    }
+
+    private void startHeartbeatCall() {
+        WebClient.builder().baseUrl(bankingServerUrl)
+                .build().get()
+                .uri("/heartbeat")
+                .exchangeToFlux(response -> response.bodyToFlux(String.class))
+                .subscribe();
     }
 
     @PreDestroy
@@ -95,23 +93,9 @@ public class McpService {
     }
 
     /**
-     * Get available tools (uses global cache if enabled, otherwise gets from user's client)
-     */
-    public List<McpSchema.Tool> getAvailableTools() {
-        if (globalToolsEnabled && globalToolsLoaded) {
-            return new ArrayList<>(globalAvailableTools);
-        }
-        // Return empty list if global tools disabled and no specific user context
-        return new ArrayList<>();
-    }
-
-    /**
      * Get available tools for a specific user
      */
     public List<McpSchema.Tool> getAvailableToolsForUser(String userId, String jwtToken) {
-        if (globalToolsEnabled && globalToolsLoaded) {
-            return new ArrayList<>(globalAvailableTools);
-        }
 
         // Get tools from user's specific client
         UserMcpSession session = userSessions.get(userId);
@@ -128,16 +112,19 @@ public class McpService {
     private ArrayList<McpSchema.Tool> getSessionTools(UserMcpSession session) {
         AtomicReference<UserMcpSession> sessionRef = new AtomicReference<>(session);
 
-        return sessionRef.get().getClient().listTools()
-                .map(McpSchema.ListToolsResult::tools)
-                .map(ArrayList::new)
+        return Mono.defer(() -> {
+                    // Client is resolved fresh on each attempt
+                    return sessionRef.get().getClient().listTools()
+                            .map(McpSchema.ListToolsResult::tools)
+                            .map(ArrayList::new);
+                })
                 .retryWhen(Retry.backoff(3, Duration.ofSeconds(1))
                         .doBeforeRetry(retrySignal -> {
                             log.warn("Retry attempt {} for listTools", retrySignal.totalRetries() + 1);
                             UserMcpSession currentSession = sessionRef.get();
                             currentSession.setConnected(false);
-                            UserMcpSession reconnectedSession = reconnectUserSession(currentSession);
-                            sessionRef.set(reconnectedSession);
+                            UserMcpSession newSession = reconnectUserSession(currentSession);
+                            sessionRef.set(newSession);
                         })
                         .onRetryExhaustedThrow((retryBackoffSpec, retrySignal) ->
                                 new RuntimeException("Failed to get session tools after retries", retrySignal.failure())
@@ -194,39 +181,20 @@ public class McpService {
      * Reconnect a user session
      */
     private UserMcpSession reconnectUserSession(UserMcpSession session) {
-        int attempts = 0;
-        while (attempts < reconnectAttempts && !session.isConnected()) {
+        if (!session.isConnected()) {
             try {
-                log.debug("Attempting to connect MCP client for user: {} (attempt {})",
-                        session.getUserId(), attempts + 1);
+                log.debug("Attempting to connect MCP client for user: {}",
+                        session.getUserId());
 
                 McpAsyncClient client = mcpClientConnectionFactory.createNewConnection(bankingServerUrl, session.getJwtToken());
                 session.setClient(client);
                 session.setConnected(true);
                 session.updateLastAccessed();
-
                 log.info("Successfully connected MCP client for user: {}", session.getUserId());
-                break;
-
             } catch (Exception e) {
-                attempts++;
-                log.warn("Failed to connect MCP client for user: {} (attempt {}): {}",
-                        session.getUserId(), attempts, e.getMessage());
-
-                if (attempts < reconnectAttempts) {
-                    try {
-                        Thread.sleep(reconnectDelaySeconds * 1000L);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
-                }
+                log.warn("Failed to connect MCP client for user: {}: {}",
+                        session.getUserId(), e.getMessage());
             }
-        }
-
-        if (!session.isConnected()) {
-            log.error("Failed to connect MCP client for user: {} after {} attempts",
-                    session.getUserId(), reconnectAttempts);
         }
         return session;
     }

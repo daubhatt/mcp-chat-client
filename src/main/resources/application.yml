@@ -58,17 +58,11 @@ app:
   chat:
     max-history-size: 20
   mcp:
-    custom-server:
-      reconnect-attempts: 30
-      reconnect-delay: 5
     session:
       # Cleanup idle sessions every 5 minutes (300 seconds)
       cleanup-interval: ${MCP_SESSION_CLEANUP_INTERVAL:300}
       # Sessions idle for more than 30 minutes (1800 seconds) will be closed
       max-idle-time: ${MCP_SESSION_MAX_IDLE_TIME:1800}
-    global-tools:
-      # Enable global tools caching (disabled by default)
-      enabled: ${MCP_GLOBAL_TOOLS_ENABLED:false}
 
 # Server Configuration
 server:
