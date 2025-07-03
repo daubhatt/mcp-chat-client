@@ -51,14 +51,14 @@ spring:  # Database Configuration
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${JWKS_URL:http://localhost:9090/oauth2/jwks}
+          issuer-uri: ${app.oauth-server-url}/oauth2/jwks
 
 app:
+  oauth-server-url: ${OAUTH_SERVER_URL:http://127.0.0.1:9090}
   chat:
     max-history-size: 20
   mcp:
     custom-server:
-      enabled: true
       reconnect-attempts: 30
       reconnect-delay: 5
     session:

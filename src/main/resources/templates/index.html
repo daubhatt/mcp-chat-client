@@ -75,7 +75,7 @@
 
     // OAuth configuration - hardcoded for security
     const OAUTH_CONFIG = {
-        serverUrl: 'https://mcp-oauth-server.onrender.com', // Changed to match Spring Boot server port
+        serverUrl: '[[${oauthServerUrl}]]', // Changed to match Spring Boot server port
         clientId: 'client',
         clientSecret: 'secret',
         authorizationEndpoint: '/oauth2/authorize', // Full path for Spring Boot
