@@ -12,16 +12,17 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
-import reactor.util.retry.Retry;
+import reactor.core.scheduler.Schedulers;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 @RequiredArgsConstructor
@@ -84,7 +85,7 @@ public class McpService {
         UserMcpSession session = userSessions.computeIfAbsent(userId, key -> createUserSession(key, jwtToken));
         session.updateLastAccessed();
 
-        if (session.getClient() == null || !session.isConnected()) {
+        if (session.getClient() == null) {
             log.info("Creating new MCP connection for user: {}", userId);
             reconnectUserSession(session);
         }
@@ -95,7 +96,7 @@ public class McpService {
     /**
      * Get available tools for a specific user
      */
-    public Mono<List<McpSchema.Tool>> getAvailableToolsForUser(String userId, String jwtToken) {
+    public List<McpSchema.Tool> getAvailableToolsForUser(String userId, String jwtToken) {
 
         // Get tools from user's specific client
         UserMcpSession session = userSessions.get(userId);
@@ -106,29 +107,31 @@ public class McpService {
         if (session.isConnected() && session.getClient() != null) {
             return getSessionTools(session);
         }
-        return Mono.empty();
+        else return Collections.emptyList();
     }
 
-    private Mono<List<McpSchema.Tool>> getSessionTools(UserMcpSession session) {
-        AtomicReference<UserMcpSession> sessionRef = new AtomicReference<>(session);
+    private List<McpSchema.Tool> getSessionTools(UserMcpSession session) {
+        int maxRetries = 3;
+        Duration backoffInterval = Duration.ofSeconds(1);
 
-        return Mono.defer(() -> {
-                    // Client is resolved fresh on each attempt
-                    return sessionRef.get().getClient().listTools()
-                            .map(McpSchema.ListToolsResult::tools);
-                })
-                .retryWhen(Retry.backoff(3, Duration.ofSeconds(1))
-                        .doBeforeRetry(retrySignal -> {
-                            log.warn("Retry attempt {} for listTools", retrySignal.totalRetries() + 1);
-                            UserMcpSession currentSession = sessionRef.get();
-                            currentSession.setConnected(false);
-                            UserMcpSession newSession = reconnectUserSession(currentSession);
-                            sessionRef.set(newSession);
-                        })
-                        .onRetryExhaustedThrow((retryBackoffSpec, retrySignal) ->
-                                new RuntimeException("Failed to get session tools after retries", retrySignal.failure())
-                        )
-                );
+        for (int attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                if (attempt > 0) {
+                    Mono.delay(backoffInterval.multipliedBy(attempt), Schedulers.boundedElastic()).block();
+                    log.warn("Retry attempt {} for listTools", attempt + 1);
+                    session.setConnected(false);
+                    reconnectUserSession(session);
+                }
+                return session.getClient().listTools()
+                        .map(McpSchema.ListToolsResult::tools)
+                        .block();
+            } catch (Exception e) {
+                if (attempt == maxRetries - 1) {
+                    throw new RuntimeException("Failed to get session tools after retries", e);
+                }
+            }
+        }
+        return Collections.emptyList(); // Should never reach here due to exception above
     }
 
     /**
@@ -178,7 +181,7 @@ public class McpService {
     /**
      * Reconnect a user session
      */
-    private UserMcpSession reconnectUserSession(UserMcpSession session) {
+    private void reconnectUserSession(UserMcpSession session) {
         if (!session.isConnected()) {
             try {
                 log.debug("Attempting to connect MCP client for user: {}",
@@ -194,7 +197,6 @@ public class McpService {
                         session.getUserId(), e.getMessage());
             }
         }
-        return session;
     }
 
     /**

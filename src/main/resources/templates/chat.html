@@ -337,9 +337,20 @@
         // Initialize with summary view
         showSummaryViewWithLoading();
 
-        await loadUserSession();
+        // Try to use cached session data first
+        const cachedSession = getCachedSessionData();
+        if (cachedSession) {
+            console.log('Using cached session data');
+            conversations = cachedSession.conversations || [];
+            renderConversations();
+            await loadCustomerSummary();
+        } else {
+            // Only call session API if no cached data is available
+            console.log('Loading fresh session data');
+            await loadUserSession();
+            await loadCustomerSummary();
+        }
 
-        await loadCustomerSummary();
         setupEventListeners();
         setupTextareaAutoResize();
         updateSidebarVisibility();
@@ -359,6 +370,10 @@
             if (response.ok) {
                 const sessionData = await response.json();
                 conversations = sessionData.conversations || [];
+
+                // Cache the session data
+                storeSessionData(sessionData);
+
                 renderConversations();
             } else {
                 console.warn('Failed to load user session');
@@ -366,6 +381,35 @@
         } catch (error) {
             console.error('Error loading user session:', error);
         }
+    }
+
+    async function refreshSessionData() {
+        await loadUserSession();
+    }
+
+    function storeSessionData(sessionData) {
+        localStorage.setItem('customerSession', JSON.stringify(sessionData));
+        localStorage.setItem('sessionTimestamp', Date.now().toString());
+    }
+
+    function getCachedSessionData() {
+        const sessionData = localStorage.getItem('customerSession');
+        const timestamp = localStorage.getItem('sessionTimestamp');
+
+        if (!sessionData || !timestamp) {
+            return null;
+        }
+
+        // Check if session data is older than 5 minutes (300000 ms)
+        const sessionAge = Date.now() - parseInt(timestamp);
+        if (sessionAge > 300000) {
+            // Session data is stale, remove it
+            localStorage.removeItem('customerSession');
+            localStorage.removeItem('sessionTimestamp');
+            return null;
+        }
+
+        return JSON.parse(sessionData);
     }
 
     async function loadCustomerSummary() {
@@ -814,7 +858,10 @@
 
             if (!currentConversationId) {
                 currentConversationId = chatResponse.conversationId;
-                await loadUserSession();
+
+                // Refresh session data when new conversation is created
+                await refreshSessionData();
+
                 document.getElementById('deleteConversationBtn').classList.remove('hidden');
             }
 
@@ -1036,7 +1083,8 @@
             }
 
             if (response.ok) {
-                await loadUserSession();
+                // Refresh session data after deletion
+                await refreshSessionData();
                 await loadCustomerSummary();
                 showSummaryView();
             } else {

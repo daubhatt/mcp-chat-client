@@ -304,7 +304,13 @@
                 throw new Error(errorMessage);
             }
 
-            return await response.json();
+            const sessionData = await response.json();
+
+            // Store session data for chat initialization
+            localStorage.setItem('customerSession', JSON.stringify(sessionData));
+            localStorage.setItem('sessionTimestamp', Date.now().toString());
+
+            return sessionData;
 
         } catch (error) {
             console.error('Application login error:', error);
@@ -381,6 +387,9 @@
         localStorage.removeItem('jwtToken');
         localStorage.removeItem('oauth_state');
         localStorage.removeItem('code_verifier');
+        // Clear session cache
+        localStorage.removeItem('customerSession');
+        localStorage.removeItem('sessionTimestamp');
     }
 
     function showLoadingSection() {
