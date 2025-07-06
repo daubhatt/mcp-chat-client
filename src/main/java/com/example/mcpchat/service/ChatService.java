@@ -132,7 +132,6 @@ public class ChatService {
                 1. NEVER modify URLs - copy them EXACTLY as received from tools
                 2. If tools return URLs, include them word-for-word in your response
                 3. Be direct and specific - no fluff or paraphrasing
-                4. Temperature is 0 - stick to facts only
                 5. Do not generate any URLs, only use URLs provided by tools
                 6. ALWAYS provide a response - if tool response is empty/minimal, acknowledge the user's request
                 
@@ -400,9 +399,9 @@ public class ChatService {
 
     private ChatResponse generateAISummary(String customerId, String jwtToken) {
         List<Message> messages = new ArrayList<>();
-
+        Integer maxTokens = 1000; // Default max tokens, can be adjusted
         String systemPrompt = """
-                       You are a banking assistant. Get financial overview and create a welcome summary.
+                       You are a banking assistant. Get financial overview and create a welcome summary. Try to respond within %s tokens.
                 
                         Format as HTML with sections:
                         - Financial Health: Net worth, trend, main assets/debts
@@ -439,13 +438,13 @@ public class ChatService {
                         - Negative: text-red-600 font-semibold
                         - Warning: text-amber-600 font-semibold
                         - Important: strong class='text-gray-800'
-                """;
+                """.formatted(maxTokens);
 
         messages.add(new SystemMessage(systemPrompt));
         messages.add(new UserMessage("Generate personalized banking summary for me, my customer id is " + customerId));
 
         // Use MCP context with user-specific tools
-        Prompt prompt = createPromptWithMcpContext(messages, customerId, jwtToken, 800);
+        Prompt prompt = createPromptWithMcpContext(messages, customerId, jwtToken, maxTokens);
 
         // Get AI response
         return anthropicChatModel.call(prompt);

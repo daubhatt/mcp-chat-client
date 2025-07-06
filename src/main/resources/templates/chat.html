@@ -3,10 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MCP Chat Client</title>
+    <title>Conversation Banking - Viom Technologies</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+        .viom-gradient {
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 25%, #06b6d4 50%, #0891b2 75%, #0e7490 100%);
+        }
+        .viom-logo-bg {
+            background: linear-gradient(45deg, #1e40af, #3b82f6);
+            background-image: url('/static/images/viom-logo.png');
+            background-size: 130%;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+        .viom-logo-bg-text {
+            background: linear-gradient(45deg, #1e40af, #3b82f6);
+        }
         .chat-container {
             height: calc(100vh - 2rem);
         }
@@ -37,17 +50,22 @@
             transition: transform 0.3s ease-in-out;
         }
         .conversation-item:hover {
-            background-color: rgba(99, 102, 241, 0.1);
+            background-color: rgba(59, 130, 246, 0.1);
         }
         .message-content {
             white-space: pre-wrap;
         }
         .summary-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #06b6d4 100%);
         }
         .summary-stat {
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
+        }
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
         /* Mobile sidebar styles */
         @media (max-width: 1023px) {
@@ -76,43 +94,73 @@
         .summary-mode .messages-container {
             height: calc(100% - 80px) !important;
         }
+        .viom-accent {
+            color: #06b6d4;
+        }
+        .viom-accent-bg {
+            background-color: #06b6d4;
+        }
+        .feature-card {
+            transition: all 0.3s ease;
+        }
+        .feature-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
     </style>
 </head>
-<body class="bg-gray-100">
+<body class="bg-gray-50">
 <div class="flex h-screen">
     <!-- Sidebar -->
-    <div id="sidebar" class="bg-white shadow-lg border-r border-gray-200 flex flex-col sidebar-transition sidebar-closed-mobile lg:w-80 lg:relative lg:z-auto fixed top-0 left-0 h-screen w-64 z-30">        <!-- Header -->
-        <div class="p-4 border-b border-gray-200">
+    <div id="sidebar" class="bg-white shadow-2xl border-r border-gray-100 flex flex-col sidebar-transition sidebar-closed-mobile lg:w-80 lg:relative lg:z-auto fixed top-0 left-0 h-screen w-64 z-30">
+        <!-- Header -->
+        <div class="viom-gradient p-6 text-white">
             <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center space-x-2">
-                    <div class="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center">
-                        <i class="fas fa-robot text-white text-sm"></i>
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 viom-logo-bg rounded-lg flex items-center justify-center backdrop-filter backdrop-blur-sm">
+                        <!-- Logo will show as background image -->
                     </div>
-                    <span class="font-semibold text-gray-800" id="userDisplayName">Chat Client</span>
+                    <div>
+                        <div class="font-bold text-lg" id="userDisplayName">Banking Assistant</div>
+                        <div class="text-blue-100 text-sm">Viom Technologies</div>
+                    </div>
                 </div>
-                <button id="logoutBtn" class="text-gray-500 hover:text-gray-700">
+                <button id="logoutBtn" class="text-white hover:text-blue-200 transition duration-200 p-2 rounded-lg hover:bg-white hover:bg-opacity-10">
                     <i class="fas fa-sign-out-alt"></i>
                 </button>
             </div>
 
-            <!-- Start Conversation Button -->
-            <button id="newConversationBtn" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition duration-200 flex items-center justify-center space-x-2 mb-4">
-                <i class="fas fa-plus"></i>
-                <span>Start Conversation</span>
-            </button>
+            <!-- Action Buttons -->
+            <div class="space-y-3">
+                <button id="newConversationBtn" class="w-full bg-white bg-opacity-20 text-white py-3 px-4 rounded-xl hover:bg-opacity-30 transition duration-200 flex items-center justify-center space-x-2 backdrop-filter backdrop-blur-sm">
+                    <i class="fas fa-plus"></i>
+                    <span>New Conversation</span>
+                </button>
 
-            <!-- Back to Dashboard Button (in sidebar) -->
-            <button id="backToDashboardBtn" class="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition duration-200 flex items-center justify-center space-x-2">
-                <i class="fas fa-tachometer-alt"></i>
-                <span>Dashboard</span>
-            </button>
+                <button id="backToDashboardBtn" class="w-full bg-white bg-opacity-10 text-white py-2 px-4 rounded-xl hover:bg-opacity-20 transition duration-200 flex items-center justify-center space-x-2" onclick="console.log('Dashboard sidebar clicked'); showSummaryView();">
+                    <i class="fas fa-chart-pie"></i>
+                    <span>Dashboard</span>
+                </button>
+            </div>
         </div>
 
         <!-- Conversations List -->
         <div class="flex-1 overflow-y-auto p-4">
-            <h3 class="text-sm font-medium text-gray-500 mb-3">Recent Conversations</h3>
+            <h3 class="text-sm font-semibold text-gray-600 mb-4 flex items-center">
+                <i class="fas fa-history mr-2 text-blue-600"></i>
+                Recent Conversations
+            </h3>
             <div id="conversationsList" class="space-y-2">
                 <!-- Conversations will be loaded here -->
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="p-4 border-t border-gray-100 bg-gray-50">
+            <div class="text-center">
+                <div class="text-xs text-gray-500 mb-1">Powered by</div>
+                <div class="text-xs font-semibold text-blue-600">Anthropic Claude AI</div>
+                <div class="text-xs text-gray-400 mt-1">www.viom.tech</div>
             </div>
         </div>
     </div>
@@ -120,25 +168,34 @@
     <!-- Main Chat Area -->
     <div id="mainChatArea" class="flex-1 flex flex-col chat-container w-full">
         <!-- Chat Header -->
-        <div class="bg-white shadow-sm border-b border-gray-200 p-4">
+        <div class="bg-white shadow-sm border-b border-gray-100 p-4">
             <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-3">
-                    <button id="sidebarToggle" class="lg:hidden text-gray-500 hover:text-gray-700">
+                    <button id="sidebarToggle" class="lg:hidden text-gray-500 hover:text-gray-700 p-2 rounded-lg hover:bg-gray-100">
                         <i class="fas fa-bars"></i>
                     </button>
 
-                    <!-- Back to Summary Button (show when in conversation) -->
-                    <button id="backToSummaryBtn" class="hidden text-gray-500 hover:text-gray-700 p-2 rounded-lg hover:bg-gray-100 flex items-center space-x-2" title="Back to Account Overview">
+                    <!-- Back to Summary Button -->
+                    <button id="backToSummaryBtn" class="hidden text-gray-500 hover:text-blue-600 p-2 rounded-lg hover:bg-blue-50 flex items-center space-x-2 transition duration-200" title="Back to Dashboard" onclick="console.log('Dashboard arrow clicked'); showSummaryView();">
                         <i class="fas fa-arrow-left"></i>
-                        <span class="hidden sm:inline text-sm">Dashboard</span>
+                        <span class="hidden sm:inline text-sm font-medium">Dashboard</span>
                     </button>
 
-                    <h1 class="text-xl font-semibold text-gray-800" id="conversationTitle">
-                        Select a conversation or start a new one
-                    </h1>
+                    <!-- Viom Logo in Header -->
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 viom-logo-bg rounded-lg flex items-center justify-center">
+                            <!-- Logo will show as background image -->
+                        </div>
+                        <div>
+                            <h1 class="text-xl font-bold text-gray-800" id="conversationTitle">
+                                Conversation Banking
+                            </h1>
+                            <div class="text-xs text-gray-500">Powered by AI • Viom Technologies</div>
+                        </div>
+                    </div>
                 </div>
                 <div class="flex items-center space-x-2">
-                    <button id="deleteConversationBtn" class="hidden text-red-500 hover:text-red-700 p-2 rounded">
+                    <button id="deleteConversationBtn" class="hidden text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition duration-200">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
@@ -146,25 +203,34 @@
         </div>
 
         <!-- Messages Area -->
-        <div id="messagesContainer" class="flex-1 overflow-y-auto p-4 messages-container">
-            <div id="messagesArea" class="space-y-4">
+        <div id="messagesContainer" class="flex-1 overflow-y-auto p-6 messages-container bg-gradient-to-b from-gray-50 to-white">
+            <div id="messagesArea" class="space-y-6">
                 <!-- Customer Summary (shown by default) -->
                 <div id="customerSummaryMain" class="hidden">
-                    <div class="max-w-4xl mx-auto">
+                    <div class="max-w-6xl mx-auto">
                         <!-- Welcome Header -->
-                        <div class="text-center mb-8">
-                            <div class="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <i class="fas fa-user-circle text-3xl text-indigo-600"></i>
+                        <div class="text-center mb-10">
+                            <div class="w-24 h-24 viom-logo-bg rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
+                                <!-- Logo will show as background image -->
                             </div>
-                            <h2 class="text-2xl font-bold text-gray-800 mb-2" id="welcomeTitle">Welcome back!</h2>
-                            <p class="text-gray-600" id="welcomeSubtitle">Here's your account overview</p>
+                            <h2 class="text-4xl font-bold text-gray-800 mb-3" id="welcomeTitle">Welcome to Conversation Banking!</h2>
+                            <p class="text-xl text-gray-600" id="welcomeSubtitle">Your AI-powered financial assistant dashboard</p>
+                            <div class="text-sm text-blue-600 font-medium mt-2">
+                                <i class="fas fa-shield-alt mr-1"></i>
+                                Secured by Viom Technologies
+                            </div>
                         </div>
 
                         <!-- AI Summary Card -->
-                        <div id="aiSummaryCard" class="summary-card rounded-xl p-6 text-white mb-6">
-                            <div class="flex items-center space-x-2 mb-4">
-                                <i class="fas fa-robot"></i>
-                                <span class="font-semibold">AI Assistant Summary</span>
+                        <div id="aiSummaryCard" class="summary-card rounded-2xl p-8 text-white mb-8 shadow-2xl">
+                            <div class="flex items-center space-x-3 mb-6">
+                                <div class="w-12 h-12 bg-white bg-opacity-20 rounded-xl flex items-center justify-center">
+                                    <i class="fas fa-robot text-xl"></i>
+                                </div>
+                                <div>
+                                    <span class="text-xl font-bold">AI Financial Assistant</span>
+                                    <div class="text-blue-100 text-sm">Powered by Anthropic Claude</div>
+                                </div>
                             </div>
                             <div id="aiSummaryMainContent" class="text-lg leading-relaxed">
                                 <!-- AI-generated summary will be loaded here -->
@@ -172,47 +238,47 @@
                         </div>
 
                         <!-- Stats Grid -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                                <div class="flex items-center space-x-3">
-                                    <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                                        <i class="fas fa-comments text-blue-600"></i>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                            <div class="feature-card bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+                                <div class="flex items-center space-x-4">
+                                    <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                                        <i class="fas fa-comments text-blue-600 text-xl"></i>
                                     </div>
                                     <div>
-                                        <div class="text-sm text-gray-500">Conversations</div>
-                                        <div class="text-2xl font-bold text-gray-800" id="totalConversations">0</div>
+                                        <div class="text-sm font-medium text-gray-500">Conversations</div>
+                                        <div class="text-3xl font-bold text-gray-800" id="totalConversations">0</div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                                <div class="flex items-center space-x-3">
-                                    <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                                        <i class="fas fa-envelope text-green-600"></i>
+                            <div class="feature-card bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+                                <div class="flex items-center space-x-4">
+                                    <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                                        <i class="fas fa-envelope text-green-600 text-xl"></i>
                                     </div>
                                     <div>
-                                        <div class="text-sm text-gray-500">Total Messages</div>
-                                        <div class="text-2xl font-bold text-gray-800" id="totalMessages">0</div>
+                                        <div class="text-sm font-medium text-gray-500">Total Messages</div>
+                                        <div class="text-3xl font-bold text-gray-800" id="totalMessages">0</div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                                <div class="flex items-center space-x-3">
-                                    <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                                        <i class="fas fa-tools text-purple-600"></i>
+                            <div class="feature-card bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+                                <div class="flex items-center space-x-4">
+                                    <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                                        <i class="fas fa-tools text-purple-600 text-xl"></i>
                                     </div>
                                     <div>
-                                        <div class="text-sm text-gray-500">Available Tools</div>
-                                        <div class="text-2xl font-bold text-gray-800" id="availableTools">0</div>
+                                        <div class="text-sm font-medium text-gray-500">AI Tools</div>
+                                        <div class="text-3xl font-bold text-gray-800" id="availableTools">0</div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                                <div class="flex items-center space-x-3">
-                                    <div class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
-                                        <i class="fas fa-calendar text-indigo-600"></i>
+                            <div class="feature-card bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+                                <div class="flex items-center space-x-4">
+                                    <div class="w-12 h-12 bg-cyan-100 rounded-xl flex items-center justify-center">
+                                        <i class="fas fa-calendar text-cyan-600 text-xl"></i>
                                     </div>
                                     <div>
-                                        <div class="text-sm text-gray-500">Member Since</div>
+                                        <div class="text-sm font-medium text-gray-500">Member Since</div>
                                         <div class="text-sm font-bold text-gray-800" id="memberSince">-</div>
                                     </div>
                                 </div>
@@ -220,75 +286,127 @@
                         </div>
 
                         <!-- Recent Activity -->
-                        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="flex items-center space-x-2">
-                                    <i class="fas fa-clock text-gray-600"></i>
-                                    <h3 class="text-lg font-semibold text-gray-800">Recent Activity</h3>
+                        <div class="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 mb-8">
+                            <div class="flex items-center justify-between mb-6">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-clock text-blue-600"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-xl font-bold text-gray-800">Recent Activity</h3>
+                                        <div class="text-sm text-gray-500">Your latest banking interactions</div>
+                                    </div>
                                 </div>
-                                <span class="text-sm text-gray-500" id="lastActiveTime">-</span>
+                                <span class="text-sm text-gray-400 bg-gray-50 px-3 py-1 rounded-full" id="lastActiveTime">-</span>
                             </div>
-                            <div id="recentActivity" class="space-y-3">
+                            <div id="recentActivity" class="space-y-4">
                                 <!-- Recent conversations will be shown here -->
                             </div>
                         </div>
 
+                        <!-- Technology Info -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                            <div class="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-6 border border-blue-100">
+                                <div class="flex items-center space-x-3 mb-3">
+                                    <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-brain text-white"></i>
+                                    </div>
+                                    <h4 class="text-lg font-semibold text-gray-800">AI Technology</h4>
+                                </div>
+                                <p class="text-gray-600 text-sm leading-relaxed">
+                                    Powered by Anthropic's Claude AI for intelligent, context-aware banking assistance with advanced reasoning capabilities.
+                                </p>
+                            </div>
+
+                            <div class="bg-gradient-to-r from-green-50 to-blue-50 rounded-xl p-6 border border-green-100">
+                                <div class="flex items-center space-x-3 mb-3">
+                                    <div class="w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-shield-alt text-white"></i>
+                                    </div>
+                                    <h4 class="text-lg font-semibold text-gray-800">Enterprise Security</h4>
+                                </div>
+                                <p class="text-gray-600 text-sm leading-relaxed">
+                                    Built with Spring Boot and OAuth2 authentication, ensuring bank-grade security for all your financial interactions.
+                                </p>
+                            </div>
+                        </div>
+
                         <!-- Call to Action -->
-                        <div class="text-center mt-8">
-                            <button id="startNewConversationBtn" class="bg-indigo-600 text-white px-8 py-3 rounded-lg hover:bg-indigo-700 transition duration-200 flex items-center justify-center space-x-2 mx-auto">
-                                <i class="fas fa-plus"></i>
-                                <span>Start Conversation</span>
+                        <div class="text-center">
+                            <button id="startNewConversationBtn" class="bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-10 py-4 rounded-xl hover:from-blue-700 hover:to-cyan-700 transition duration-300 flex items-center justify-center space-x-3 mx-auto shadow-lg text-lg font-semibold">
+                                <i class="fas fa-comment-dots text-xl"></i>
+                                <span>Start Banking Conversation</span>
                             </button>
+                            <p class="text-gray-500 text-sm mt-3">Ask questions, get account info, or request financial assistance</p>
                         </div>
                     </div>
                 </div>
 
                 <!-- Default welcome message (fallback) -->
                 <div id="defaultWelcome" class="flex justify-center">
-                    <div class="text-center p-8">
-                        <div class="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <i class="fas fa-robot text-2xl text-indigo-600"></i>
+                    <div class="text-center p-12">
+                        <div class="w-20 h-20 viom-logo-bg rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+                            <!-- Logo will show as background image -->
                         </div>
-                        <h2 class="text-xl font-semibold text-gray-800 mb-2">Welcome to MCP Chat!</h2>
-                        <p class="text-gray-600">Start a conversation or select an existing one from the sidebar.</p>
+                        <h2 class="text-2xl font-bold text-gray-800 mb-3">Welcome to Conversation Banking!</h2>
+                        <p class="text-gray-600 mb-6">Your AI-powered banking assistant by Viom Technologies</p>
+                        <p class="text-sm text-blue-600">Start a conversation or select an existing one from the sidebar.</p>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- Typing Indicator -->
-        <div id="typingIndicator" class="hidden px-4 py-2">
-            <div class="flex items-center space-x-2 text-gray-500">
-                <div class="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                    <i class="fas fa-robot text-sm"></i>
+        <div id="typingIndicator" class="hidden px-6 py-3">
+            <div class="flex items-center space-x-3 text-gray-500">
+                <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                    <i class="fas fa-robot text-blue-600"></i>
                 </div>
-                <span class="typing-indicator">AI is typing<span class="loading-dots"></span></span>
+                <div class="bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100">
+                    <span class="typing-indicator">AI is thinking<span class="loading-dots"></span></span>
+                </div>
             </div>
         </div>
 
         <!-- Message Input -->
-        <div class="bg-white border-t border-gray-200 p-4 message-input-container">
-            <form id="messageForm" class="flex space-x-3">
+        <div class="bg-white border-t border-gray-100 p-6 message-input-container">
+            <form id="messageForm" class="flex space-x-4">
                 <div class="flex-1 relative">
                     <textarea
                             id="messageInput"
-                            placeholder="Type your message..."
-                            class="w-full p-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            placeholder="Ask about your accounts, request transfers, or get financial advice..."
+                            class="w-full p-4 border-2 border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200 bg-gray-50 hover:bg-white"
                             rows="2"
                             maxlength="4000"
                     ></textarea>
-                    <div id="charCounter" class="absolute bottom-1 right-2 text-xs text-gray-400">0/4000</div>
+                    <div id="charCounter" class="absolute bottom-2 right-3 text-xs text-gray-400 bg-white px-2 py-1 rounded">0/4000</div>
                 </div>
                 <button
                         type="submit"
                         id="sendButton"
-                        class="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition duration-200 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        class="bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-8 py-4 rounded-xl hover:from-blue-700 hover:to-cyan-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
                         disabled
                 >
-                    <i class="fas fa-paper-plane"></i>
-                    <span class="hidden sm:inline">Send</span>
+                    <i class="fas fa-paper-plane text-lg"></i>
+                    <span class="hidden sm:inline font-medium">Send</span>
                 </button>
             </form>
+
+            <!-- Quick Actions -->
+            <div class="mt-4 flex flex-wrap gap-2">
+                <button class="quick-action bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm hover:bg-blue-100 transition duration-200" data-message="Show me my account balance">
+                    <i class="fas fa-wallet mr-1"></i>Account Balance
+                </button>
+                <button class="quick-action bg-green-50 text-green-700 px-3 py-1 rounded-full text-sm hover:bg-green-100 transition duration-200" data-message="Help me transfer money">
+                    <i class="fas fa-exchange-alt mr-1"></i>Transfer Money
+                </button>
+                <button class="quick-action bg-purple-50 text-purple-700 px-3 py-1 rounded-full text-sm hover:bg-purple-100 transition duration-200" data-message="Show me recent transactions">
+                    <i class="fas fa-history mr-1"></i>Recent Transactions
+                </button>
+                <button class="quick-action bg-orange-50 text-orange-700 px-3 py-1 rounded-full text-sm hover:bg-orange-100 transition duration-200" data-message="I need financial advice">
+                    <i class="fas fa-chart-line mr-1"></i>Financial Advice
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -332,7 +450,10 @@
         }
 
         currentUser = JSON.parse(userData);
-        document.getElementById('userDisplayName').textContent = currentUser.displayName || currentUser.customerId;
+
+        // Extract user's display name for greeting
+        const userName = currentUser.displayName || currentUser.customerId || 'User';
+        document.getElementById('userDisplayName').textContent = userName;
 
         // Initialize with summary view
         showSummaryViewWithLoading();
@@ -353,7 +474,18 @@
 
         setupEventListeners();
         setupTextareaAutoResize();
+        setupQuickActions();
         updateSidebarVisibility();
+    }
+
+    function setupQuickActions() {
+        document.querySelectorAll('.quick-action').forEach(button => {
+            button.addEventListener('click', function() {
+                const message = this.dataset.message;
+                document.getElementById('messageInput').value = message;
+                handleInputChange({ target: document.getElementById('messageInput') });
+            });
+        });
     }
 
     async function loadUserSession() {
@@ -444,10 +576,22 @@
     function renderCustomerSummaryMain(summary) {
         console.log('Rendering customer summary with data:', summary);
 
-        // Update welcome title
+        // Update welcome title with personalized greeting
         const welcomeTitle = document.getElementById('welcomeTitle');
         if (welcomeTitle) {
-            welcomeTitle.textContent = `Welcome back, ${summary.displayName || summary.customerId}!`;
+            const userName = summary.displayName || summary.customerId || currentUser?.displayName || currentUser?.customerId || 'User';
+            const currentHour = new Date().getHours();
+            let greeting = 'Welcome back';
+
+            if (currentHour < 12) {
+                greeting = 'Good morning';
+            } else if (currentHour < 17) {
+                greeting = 'Good afternoon';
+            } else {
+                greeting = 'Good evening';
+            }
+
+            welcomeTitle.textContent = `${greeting}, ${userName}!`;
         }
 
         // Update AI summary with better formatting
@@ -492,10 +636,10 @@
             } else {
                 aiSummaryContent.innerHTML = `
                 <div class='text-white leading-relaxed'>
-                    <h4 class='font-semibold mb-2 flex items-center'>
-                        <i class='fas fa-robot mr-2'></i>AI Assistant Ready
+                    <h4 class='font-semibold mb-3 flex items-center text-xl'>
+                        <i class='fas fa-robot mr-3'></i>AI Assistant Ready
                     </h4>
-                    <p>Welcome! I'm here to help you with various banking tasks using the available tools. Start a conversation to see what I can do for you.</p>
+                    <p class="text-lg">Welcome to Conversation Banking! I'm your AI-powered financial assistant, ready to help you with account inquiries, transfers, financial planning, and more. Start a conversation to explore what I can do for you.</p>
                 </div>
             `;
             }
@@ -512,7 +656,7 @@
         if (totalMessages) totalMessages.textContent = summary.totalMessages || 0;
         if (availableTools) availableTools.textContent = summary.availableToolsCount || 0;
         if (memberSince) memberSince.textContent = summary.joinedAt || 'Today';
-        if (lastActiveTime) lastActiveTime.textContent = `Last active: ${summary.lastActiveAt || 'Now'}`;
+        if (lastActiveTime) lastActiveTime.textContent = `${summary.lastActiveAt || 'Now'}`;
 
         // Render recent activity
         renderRecentActivity();
@@ -531,7 +675,7 @@
         }
 
         // Update conversation title
-        document.getElementById('conversationTitle').textContent = 'Account Overview';
+        document.getElementById('conversationTitle').textContent = 'Banking Dashboard';
 
         // Hide navigation buttons since we're in summary
         document.getElementById('deleteConversationBtn').classList.add('hidden');
@@ -555,9 +699,12 @@
 
         if (conversations.length === 0) {
             recentActivity.innerHTML = `
-                <div class="text-center text-gray-500 py-4">
-                    <i class="fas fa-history text-2xl mb-2"></i>
-                    <p>No conversations yet. Start your first conversation!</p>
+                <div class="text-center text-gray-500 py-8">
+                    <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-history text-2xl text-gray-400"></i>
+                    </div>
+                    <p class="text-lg font-medium mb-2">No conversations yet</p>
+                    <p class="text-sm">Start your first banking conversation to see activity here!</p>
                 </div>
             `;
             return;
@@ -567,16 +714,19 @@
         const recentConversations = conversations.slice(0, 3);
 
         recentActivity.innerHTML = recentConversations.map(conv => `
-            <div class="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition duration-200"
+            <div class="flex items-center space-x-4 p-4 bg-gray-50 rounded-xl hover:bg-blue-50 cursor-pointer transition duration-200 border border-gray-100"
                  onclick="loadConversationFromSummary('${conv.conversationId}')">
-                <div class="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
-                    <i class="fas fa-comment text-indigo-600 text-sm"></i>
+                <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                    <i class="fas fa-comment text-blue-600 text-lg"></i>
                 </div>
                 <div class="flex-1">
-                    <div class="font-medium text-sm text-gray-800 truncate">${escapeHtml(conv.title)}</div>
-                    <div class="text-xs text-gray-500 truncate">${escapeHtml(conv.lastMessage)}</div>
+                    <div class="font-semibold text-gray-800 truncate mb-1">${escapeHtml(conv.title)}</div>
+                    <div class="text-sm text-gray-500 truncate">${escapeHtml(conv.lastMessage)}</div>
+                    <div class="text-xs text-gray-400 mt-1">${formatDate(conv.updatedAt)} • ${conv.messageCount} messages</div>
                 </div>
-                <div class="text-xs text-gray-400">${formatDate(conv.updatedAt)}</div>
+                <div class="text-blue-600">
+                    <i class="fas fa-chevron-right"></i>
+                </div>
             </div>
         `).join('');
 
@@ -594,7 +744,7 @@
             defaultWelcome.classList.remove('hidden');
         }
 
-        document.getElementById('conversationTitle').textContent = 'Welcome to MCP Chat';
+        document.getElementById('conversationTitle').textContent = 'Conversation Banking';
 
         // Enable summary mode for default welcome too
         isSummaryMode = true;
@@ -602,7 +752,7 @@
     }
 
     function showSummaryViewWithLoading() {
-        document.getElementById('conversationTitle').textContent = 'Account Overview';
+        document.getElementById('conversationTitle').textContent = 'Banking Dashboard';
         document.getElementById('deleteConversationBtn').classList.add('hidden');
         document.getElementById('backToSummaryBtn').classList.add('hidden');
         currentConversationId = null;
@@ -623,142 +773,52 @@
 
         const aiSummaryContent = document.getElementById('aiSummaryMainContent');
         if (aiSummaryContent) {
-            aiSummaryContent.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Loading your personalized summary...';
+            aiSummaryContent.innerHTML = '<div class="flex items-center text-white"><i class="fas fa-spinner fa-spin mr-3 text-xl"></i>Loading your personalized banking summary...</div>';
         }
     }
 
     function showSummaryView() {
-        console.log('showSummaryView() called - returning to dashboard');
+        console.log('🔍 Redirecting to fresh dashboard state...');
 
-        const messagesArea = document.getElementById('messagesArea');
-        messagesArea.innerHTML = `
-            <!-- Customer Summary (shown by default) -->
-            <div id="customerSummaryMain" class="">
-                <div class="max-w-4xl mx-auto">
-                    <!-- Welcome Header -->
-                    <div class="text-center mb-8">
-                        <div class="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <i class="fas fa-user-circle text-3xl text-indigo-600"></i>
-                        </div>
-                        <h2 class="text-2xl font-bold text-gray-800 mb-2" id="welcomeTitle">Welcome back!</h2>
-                        <p class="text-gray-600" id="welcomeSubtitle">Here's your account overview</p>
-                    </div>
+        try {
+            // Simply reload the page to get fresh dashboard state (like after login)
+            window.location.reload();
+        } catch (error) {
+            console.error('❌ Error reloading page:', error);
+            // Fallback: try to reset to initial state manually
+            resetToInitialDashboardState();
+        }
+    }
 
-                    <!-- AI Summary Card -->
-                    <div id="aiSummaryCard" class="summary-card rounded-xl p-6 text-white mb-6">
-                        <div class="flex items-center space-x-2 mb-4">
-                            <i class="fas fa-robot"></i>
-                            <span class="font-semibold">AI Assistant Summary</span>
-                        </div>
-                        <div id="aiSummaryMainContent" class="text-lg leading-relaxed">
-                            <i class="fas fa-spinner fa-spin mr-2"></i>Loading your personalized summary...
-                        </div>
-                    </div>
+    function resetToInitialDashboardState() {
+        console.log('🔄 Resetting to initial dashboard state...');
 
-                    <!-- Stats Grid -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                            <div class="flex items-center space-x-3">
-                                <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                                    <i class="fas fa-comments text-blue-600"></i>
-                                </div>
-                                <div>
-                                    <div class="text-sm text-gray-500">Conversations</div>
-                                    <div class="text-2xl font-bold text-gray-800" id="totalConversations">-</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                            <div class="flex items-center space-x-3">
-                                <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                                    <i class="fas fa-envelope text-green-600"></i>
-                                </div>
-                                <div>
-                                    <div class="text-sm text-gray-500">Total Messages</div>
-                                    <div class="text-2xl font-bold text-gray-800" id="totalMessages">-</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                            <div class="flex items-center space-x-3">
-                                <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                                    <i class="fas fa-tools text-purple-600"></i>
-                                </div>
-                                <div>
-                                    <div class="text-sm text-gray-500">Available Tools</div>
-                                    <div class="text-2xl font-bold text-gray-800" id="availableTools">-</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                            <div class="flex items-center space-x-3">
-                                <div class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
-                                    <i class="fas fa-calendar text-indigo-600"></i>
-                                </div>
-                                <div>
-                                    <div class="text-sm text-gray-500">Member Since</div>
-                                    <div class="text-sm font-bold text-gray-800" id="memberSince">-</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Recent Activity -->
-                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="flex items-center space-x-2">
-                                <i class="fas fa-clock text-gray-600"></i>
-                                <h3 class="text-lg font-semibold text-gray-800">Recent Activity</h3>
-                            </div>
-                            <span class="text-sm text-gray-500" id="lastActiveTime">-</span>
-                        </div>
-                        <div id="recentActivity" class="space-y-3">
-                            <div class="text-center text-gray-500 py-4">
-                                <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
-                                <p>Loading recent activity...</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Call to Action -->
-                    <div class="text-center mt-8">
-                        <button id="startNewConversationBtn" class="bg-indigo-600 text-white px-8 py-3 rounded-lg hover:bg-indigo-700 transition duration-200 flex items-center justify-center space-x-2 mx-auto">
-                            <i class="fas fa-plus"></i>
-                            <span>Start Conversation</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Default welcome message (fallback) -->
-            <div id="defaultWelcome" class="hidden flex justify-center">
-                <div class="text-center p-8">
-                    <div class="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <i class="fas fa-robot text-2xl text-indigo-600"></i>
-                    </div>
-                    <h2 class="text-xl font-semibold text-gray-800 mb-2">Welcome to MCP Chat!</h2>
-                    <p class="text-gray-600">Start a conversation or select an existing one from the sidebar.</p>
-                </div>
-            </div>
-        `;
-
-        document.getElementById('conversationTitle').textContent = 'Account Overview';
-        document.getElementById('deleteConversationBtn').classList.add('hidden');
-        document.getElementById('backToSummaryBtn').classList.add('hidden');
+        // Reset all state variables
         currentConversationId = null;
         isSummaryMode = true;
         updateSummaryMode();
 
-        const newConvBtn = document.getElementById('startNewConversationBtn');
-        if (newConvBtn) {
-            newConvBtn.addEventListener('click', startNewConversation);
-        }
+        // Update UI elements
+        document.getElementById('conversationTitle').textContent = 'Banking Dashboard';
+        document.getElementById('deleteConversationBtn').classList.add('hidden');
+        document.getElementById('backToSummaryBtn').classList.add('hidden');
 
-        loadCustomerSummary();
-        renderConversations();
+        // Call the same initialization sequence as when user first logs in
+        showSummaryViewWithLoading();
 
-        console.log('Summary view recreated successfully');
+        // Reload all data fresh
+        setTimeout(async () => {
+            try {
+                await loadUserSession();
+                await loadCustomerSummary();
+            } catch (error) {
+                console.error('Error during dashboard reset:', error);
+            }
+        }, 100);
     }
+
+    // Make showSummaryView globally accessible for onclick handler
+    window.showSummaryView = showSummaryView;
 
     function updateSummaryMode() {
         const mainChatArea = document.getElementById('mainChatArea');
@@ -783,8 +843,16 @@
             startBtn.addEventListener('click', startNewConversation);
         }
 
-        document.getElementById('backToSummaryBtn').addEventListener('click', showSummaryView);
-        document.getElementById('backToDashboardBtn').addEventListener('click', showSummaryView);
+        // Add event listeners for dashboard buttons
+        const backToDashboardBtn = document.getElementById('backToDashboardBtn');
+        if (backToDashboardBtn) {
+            backToDashboardBtn.addEventListener('click', showSummaryView);
+        }
+
+        const backToSummaryBtn = document.getElementById('backToSummaryBtn');
+        if (backToSummaryBtn) {
+            backToSummaryBtn.addEventListener('click', showSummaryView);
+        }
         document.getElementById('logoutBtn').addEventListener('click', handleLogout);
         document.getElementById('deleteConversationBtn').addEventListener('click', handleDeleteConversation);
         document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
@@ -858,10 +926,7 @@
 
             if (!currentConversationId) {
                 currentConversationId = chatResponse.conversationId;
-
-                // Refresh session data when new conversation is created
                 await refreshSessionData();
-
                 document.getElementById('deleteConversationBtn').classList.remove('hidden');
             }
 
@@ -888,30 +953,34 @@
         const processedContent = makeUrlsClickable(content);
 
         if (type === 'user') {
-            messageDiv.className = 'flex justify-end';
+            messageDiv.className = 'flex justify-end mb-4';
             messageDiv.innerHTML = `
-                <div class="message-bubble bg-indigo-600 text-white p-3 rounded-lg rounded-br-none">
-                    <div class="message-content">${processedContent}</div>
-                    <div class="text-xs opacity-75 mt-1">${new Date().toLocaleTimeString()}</div>
+                <div class="message-bubble bg-gradient-to-r from-blue-600 to-cyan-600 text-white p-4 rounded-2xl rounded-br-lg shadow-lg">
+                    <div class="message-content font-medium">${processedContent}</div>
+                    <div class="text-xs opacity-80 mt-2">${new Date().toLocaleTimeString()}</div>
                 </div>
             `;
         } else if (type === 'assistant') {
-            messageDiv.className = 'flex justify-start';
+            messageDiv.className = 'flex justify-start mb-4';
             messageDiv.innerHTML = `
-                <div class="flex space-x-2 max-w-full">
-                    <div class="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center flex-shrink-0">
-                        <i class="fas fa-robot text-sm text-gray-600"></i>
+                <div class="flex space-x-3 max-w-full">
+                    <div class="w-10 h-10 viom-logo-bg rounded-full flex items-center justify-center flex-shrink-0 shadow-md">
+                        <!-- Logo will show as background image -->
                     </div>
-                    <div class="message-bubble bg-white border border-gray-200 p-3 rounded-lg rounded-bl-none">
-                        <div class="message-content">${processedContent}</div>
-                        <div class="text-xs text-gray-500 mt-1">${new Date().toLocaleTimeString()}</div>
+                    <div class="message-bubble bg-white border-2 border-gray-100 p-4 rounded-2xl rounded-bl-lg shadow-lg">
+                        <div class="message-content text-gray-800">${processedContent}</div>
+                        <div class="text-xs text-gray-500 mt-2 flex items-center">
+                            <i class="fas fa-robot mr-1"></i>
+                            AI Assistant • ${new Date().toLocaleTimeString()}
+                        </div>
                     </div>
                 </div>
             `;
         } else if (type === 'system') {
-            messageDiv.className = 'flex justify-center';
+            messageDiv.className = 'flex justify-center mb-4';
             messageDiv.innerHTML = `
-                <div class="bg-yellow-100 border border-yellow-200 text-yellow-800 p-2 rounded text-sm">
+                <div class="bg-orange-100 border-2 border-orange-200 text-orange-800 p-3 rounded-xl text-sm shadow-sm">
+                    <i class="fas fa-info-circle mr-2"></i>
                     ${processedContent}
                 </div>
             `;
@@ -922,21 +991,18 @@
     }
 
     function makeUrlsClickable(text) {
-        // URL regex pattern that matches http, https, and www URLs
         const urlRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)|(\b[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b(?:\/[^\s]*)?)/g;
 
         return escapeHtml(text).replace(urlRegex, function(url) {
             let href = url;
 
-            // Add protocol if missing
             if (url.startsWith('www.')) {
                 href = 'https://' + url;
             } else if (!url.startsWith('http://') && !url.startsWith('https://')) {
-                // For domain-only URLs like "example.com"
                 href = 'https://' + url;
             }
 
-            return `<a href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline font-medium">${url}</a>`;
         });
     }
 
@@ -964,8 +1030,12 @@
 
         if (conversations.length === 0) {
             conversationsList.innerHTML = `
-                <div class="text-center text-gray-500 text-sm py-4">
-                    No conversations yet.<br>Start a new one!
+                <div class="text-center text-gray-500 text-sm py-6">
+                    <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <i class="fas fa-comment text-gray-400"></i>
+                    </div>
+                    <p class="font-medium mb-1">No conversations yet</p>
+                    <p class="text-xs">Start your first banking conversation!</p>
                 </div>
             `;
             return;
@@ -974,11 +1044,24 @@
         const highlightId = currentConversationId;
 
         conversationsList.innerHTML = conversations.map(conv => `
-            <div class="conversation-item p-3 rounded-lg cursor-pointer border border-transparent hover:border-indigo-200 ${conv.conversationId === highlightId ? 'bg-indigo-50 border-indigo-200' : ''}"
+            <div class="conversation-item p-4 rounded-xl cursor-pointer border-2 border-transparent hover:border-blue-100 hover:bg-blue-50 transition duration-200 ${conv.conversationId === highlightId ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-gray-50'}"
                  data-conversation-id="${conv.conversationId}">
-                <div class="font-medium text-sm text-gray-800 truncate">${escapeHtml(conv.title)}</div>
-                <div class="text-xs text-gray-500 mt-1 truncate">${escapeHtml(conv.lastMessage)}</div>
-                <div class="text-xs text-gray-400 mt-1">${formatDate(conv.updatedAt)} • ${conv.messageCount} messages</div>
+                <div class="flex items-start space-x-3">
+                    <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-comment text-blue-600 text-sm"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-semibold text-sm text-gray-800 truncate mb-1">${escapeHtml(conv.title)}</div>
+                        <div class="text-xs text-gray-500 truncate mb-2">${escapeHtml(conv.lastMessage)}</div>
+                        <div class="flex items-center text-xs text-gray-400">
+                            <i class="fas fa-clock mr-1"></i>
+                            ${formatDate(conv.updatedAt)}
+                            <span class="mx-1">•</span>
+                            <i class="fas fa-comment mr-1"></i>
+                            ${conv.messageCount}
+                        </div>
+                    </div>
+                </div>
             </div>
         `).join('');
 
@@ -996,11 +1079,20 @@
             isSummaryMode = false;
             updateSummaryMode();
 
-            document.getElementById('conversationTitle').textContent = 'Loading...';
+            document.getElementById('conversationTitle').textContent = 'Loading conversation...';
             document.getElementById('deleteConversationBtn').classList.remove('hidden');
             document.getElementById('backToSummaryBtn').classList.remove('hidden');
 
-            document.getElementById('messagesArea').innerHTML = '';
+            document.getElementById('messagesArea').innerHTML = `
+                <div class="flex justify-center items-center py-12">
+                    <div class="text-center">
+                        <div class="w-16 h-16 viom-logo-bg rounded-full flex items-center justify-center mx-auto mb-4">
+                            <!-- Logo will show as background image -->
+                        </div>
+                        <p class="text-gray-600 font-medium">Loading conversation...</p>
+                    </div>
+                </div>
+            `;
 
             const response = await fetch(`${API_BASE}/chat/conversation/${conversationId}/messages`, {
                 headers: getAuthHeaders()
@@ -1019,6 +1111,8 @@
             const conversation = conversations.find(c => c.conversationId === conversationId);
             document.getElementById('conversationTitle').textContent = conversation ? conversation.title : 'Conversation';
 
+            document.getElementById('messagesArea').innerHTML = '';
+
             messages.forEach(msg => {
                 if (msg.messageType === 'USER') {
                     addMessageToUI('user', msg.content);
@@ -1033,6 +1127,17 @@
         } catch (error) {
             console.error('Error loading conversation:', error);
             document.getElementById('conversationTitle').textContent = 'Error loading conversation';
+            document.getElementById('messagesArea').innerHTML = `
+                <div class="flex justify-center items-center py-12">
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <i class="fas fa-exclamation-triangle text-2xl text-red-600"></i>
+                        </div>
+                        <p class="text-red-600 font-medium">Error loading conversation</p>
+                        <p class="text-gray-500 text-sm mt-1">Please try again or select a different conversation</p>
+                    </div>
+                </div>
+            `;
         }
     }
 
@@ -1047,15 +1152,31 @@
 
         document.getElementById('conversationTitle').textContent = 'New Conversation';
         document.getElementById('deleteConversationBtn').classList.add('hidden');
-        document.getElementById('backToSummaryBtn').classList.remove('hidden');
+
+        // Make sure the back to dashboard button is visible and working
+        const backBtn = document.getElementById('backToSummaryBtn');
+        backBtn.classList.remove('hidden');
+        console.log('Back to dashboard button should now be visible in new conversation');
+
         document.getElementById('messagesArea').innerHTML = `
-            <div class="flex justify-center">
-                <div class="text-center p-8">
-                    <div class="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <i class="fas fa-robot text-2xl text-indigo-600"></i>
+            <div class="flex justify-center items-center py-12">
+                <div class="text-center">
+                    <div class="w-20 h-20 viom-logo-bg rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+                        <!-- Logo will show as background image -->
                     </div>
-                    <h2 class="text-xl font-semibold text-gray-800 mb-2">New Conversation</h2>
-                    <p class="text-gray-600">Start by sending a message below.</p>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-3">New Banking Conversation</h2>
+                    <p class="text-gray-600 mb-6">Start by asking a question or requesting assistance below.</p>
+                    <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 max-w-md mx-auto">
+                        <div class="text-sm text-blue-800">
+                            <div class="font-semibold mb-2">💡 Try asking:</div>
+                            <ul class="text-left space-y-1">
+                                <li>• "What's my account balance?"</li>
+                                <li>• "Help me transfer money"</li>
+                                <li>• "Show recent transactions"</li>
+                                <li>• "I need financial advice"</li>
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -1083,7 +1204,6 @@
             }
 
             if (response.ok) {
-                // Refresh session data after deletion
                 await refreshSessionData();
                 await loadCustomerSummary();
                 showSummaryView();
