@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Conversation Banking - Viom Technologies</title>
+    <title>Conversational Banking - Viom Technologies</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -19,6 +19,14 @@
         .viom-logo-bg {
             background: linear-gradient(45deg, #1e40af, #3b82f6);
             background-image: url('/static/images/viom-logo.png');
+            background-size: 130%;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+
+        .viom-logo-solid {
+            background: linear-gradient(45deg, #1e40af, #3b82f6);
+            background-image: url('/static/images/viom-logo-solid.png');
             background-size: 130%;
             background-repeat: no-repeat;
             background-position: center;
@@ -59,16 +67,15 @@
 <nav class="p-6">
     <div class="max-w-7xl mx-auto flex justify-between items-center">
         <div class="flex items-center space-x-4">
-            <div class="w-12 h-12 viom-logo-bg rounded-lg flex items-center justify-center shadow-lg">
+            <div class="w-12 h-12 viom-logo-solid rounded-lg flex items-center justify-center shadow-lg">
                 <!-- Logo will show as background image -->
             </div>
             <div>
-                <div class="text-white font-bold text-lg">Viom Technologies</div>
-                <div class="text-blue-100 text-sm">www.viom.tech</div>
+                <div class="text-white font-bold text-lg">Viom Tech</div>
             </div>
         </div>
         <div class="text-right">
-            <div class="text-white font-semibold">Conversation Banking</div>
+            <div class="text-white font-semibold">Conversational Banking</div>
             <div class="text-blue-100 text-sm">Powered by Anthropic & Spring</div>
         </div>
     </div>
@@ -80,8 +87,8 @@
             <!-- Left Side - Product Information -->
             <div class="text-center lg:text-left">
 
-                <h1 class="text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
-                    Conversation<br>
+                <h1 class="text-5xl lg:text-6xl font-bold text-white mb-6 mt-20 leading-tight">
+                    Conversational<br>
                     <span class="text-cyan-300">Banking</span>
                 </h1>
 
@@ -139,7 +146,7 @@
                             <!-- Logo will show as background image -->
                         </div>
                         <h2 class="text-2xl font-bold text-gray-800 mb-2">Welcome Back</h2>
-                        <p class="text-gray-600">Sign in to access your Conversation Banking</p>
+                        <p class="text-gray-600">Sign in to access your Conversational Banking</p>
                     </div>
 
                     <!-- Login Section -->
