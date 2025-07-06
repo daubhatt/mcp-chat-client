@@ -2,7 +2,6 @@ package com.example.mcpchat.service;
 
 import com.example.mcpchat.config.McpClientConnectionFactory;
 import com.example.mcpchat.dto.UserMcpSession;
-import io.modelcontextprotocol.client.McpAsyncClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.spec.McpSchema;
 import jakarta.annotation.PostConstruct;
@@ -11,11 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -103,12 +98,12 @@ public class McpService {
 
     private List<McpSchema.Tool> getSessionTools(UserMcpSession session) {
         int maxRetries = 3;
-        Duration backoffInterval = Duration.ofSeconds(1);
-
+        long backoffIntervalMs = 1000; // 1 second in milliseconds
         for (int attempt = 0; attempt < maxRetries; attempt++) {
             try {
                 if (attempt > 0) {
-                    Mono.delay(backoffInterval.multipliedBy(attempt), Schedulers.boundedElastic()).block();
+                    long delay = backoffIntervalMs * attempt;
+                    Thread.sleep(delay); // Simplified retry delay using Thread.sleep
                     log.warn("Retry attempt {} for listTools", attempt + 1);
                     session.setConnected(false);
                     reconnectUserSession(session);
@@ -120,7 +115,7 @@ public class McpService {
                 }
             }
         }
-        return Collections.emptyList(); // Should never reach here due to exception above
+        return Collections.emptyList();
     }
 
     /**
