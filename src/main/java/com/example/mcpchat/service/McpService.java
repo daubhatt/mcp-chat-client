@@ -3,6 +3,7 @@ package com.example.mcpchat.service;
 import com.example.mcpchat.config.McpClientConnectionFactory;
 import com.example.mcpchat.dto.UserMcpSession;
 import io.modelcontextprotocol.client.McpAsyncClient;
+import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.spec.McpSchema;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -47,15 +48,6 @@ public class McpService {
     @PostConstruct
     public void initialize() {
         startSessionCleanup();
-        startHeartbeatCall();
-    }
-
-    private void startHeartbeatCall() {
-        WebClient.builder().baseUrl(bankingServerUrl)
-                .build().get()
-                .uri("/heartbeat")
-                .exchangeToFlux(response -> response.bodyToFlux(String.class))
-                .subscribe();
     }
 
     @PreDestroy
@@ -80,12 +72,12 @@ public class McpService {
     /**
      * Get or create MCP client for a specific user
      */
-    public McpAsyncClient getClientForUser(String userId, String jwtToken) {
+    public McpSyncClient getClientForUser(String userId, String jwtToken) {
 
         UserMcpSession session = userSessions.computeIfAbsent(userId, key -> createUserSession(key, jwtToken));
         session.updateLastAccessed();
 
-        if (session.getClient() == null) {
+        if (session.getClient() == null || !session.isConnected()) {
             log.info("Creating new MCP connection for user: {}", userId);
             reconnectUserSession(session);
         }
@@ -106,8 +98,7 @@ public class McpService {
         }
         if (session.isConnected() && session.getClient() != null) {
             return getSessionTools(session);
-        }
-        else return Collections.emptyList();
+        } else return Collections.emptyList();
     }
 
     private List<McpSchema.Tool> getSessionTools(UserMcpSession session) {
@@ -122,9 +113,7 @@ public class McpService {
                     session.setConnected(false);
                     reconnectUserSession(session);
                 }
-                return session.getClient().listTools()
-                        .map(McpSchema.ListToolsResult::tools)
-                        .block();
+                return session.getClient().listTools().tools();
             } catch (Exception e) {
                 if (attempt == maxRetries - 1) {
                     throw new RuntimeException("Failed to get session tools after retries", e);
@@ -187,7 +176,7 @@ public class McpService {
                 log.debug("Attempting to connect MCP client for user: {}",
                         session.getUserId());
 
-                McpAsyncClient client = mcpClientConnectionFactory.createNewConnection(bankingServerUrl, session.getJwtToken());
+                McpSyncClient client = mcpClientConnectionFactory.createNewConnection(bankingServerUrl, session.getJwtToken());
                 session.setClient(client);
                 session.setConnected(true);
                 session.updateLastAccessed();
@@ -219,12 +208,12 @@ public class McpService {
             // Health check for remaining sessions
             userSessions.values().forEach(session -> {
                 if (session.isConnected() && session.getClient() != null) {
-                    session.getClient().listTools()
-                            .doOnError(ex -> {
-                                log.warn("Health check failed for user: {}", session.getUserId());
-                                session.setConnected(false);
-                            })
-                            .subscribe();
+                    try {
+                        session.getClient().listTools();
+                    } catch (Exception e) {
+                        log.warn("Health check failed for user: {}", session.getUserId(), e);
+                        session.setConnected(false);
+                    }
                 }
             });
 

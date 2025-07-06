@@ -28,7 +28,7 @@ spring:  # Database Configuration
   application:
     name: mcp-chat-client
   main:
-    web-application-type: reactive
+    web-application-type: servlet
     banner-mode: log
   ai:
     # Anthropic Configuration

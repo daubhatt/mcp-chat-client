@@ -1,6 +1,6 @@
 package com.example.mcpchat.dto;
 
-import io.modelcontextprotocol.client.McpAsyncClient;
+import io.modelcontextprotocol.client.McpSyncClient;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -11,7 +11,7 @@ public class UserMcpSession {
 
     private final String userId;
     @Setter
-    private McpAsyncClient client;
+    private McpSyncClient client;
     @Setter
     private volatile boolean connected = false;
     private LocalDateTime lastAccessed;

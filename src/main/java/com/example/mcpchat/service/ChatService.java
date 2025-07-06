@@ -13,7 +13,7 @@ import com.example.mcpchat.repository.ConversationRepository;
 import com.example.mcpchat.repository.CustomerRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.modelcontextprotocol.client.McpAsyncClient;
+import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.spec.McpSchema;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +25,7 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.mcp.AsyncMcpToolCallbackProvider;
+import org.springframework.ai.mcp.SyncMcpToolCallbackProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,13 +53,13 @@ public class ChatService {
 
     private Prompt createPromptWithMcpContext(List<Message> messages, String customerId, String jwtToken, Integer maxTokens) {
         // Get user-specific MCP client
-        McpAsyncClient userMcpClient = mcpService.getClientForUser(customerId, jwtToken);
+        McpSyncClient userMcpClient = mcpService.getClientForUser(customerId, jwtToken);
 
         AnthropicChatOptions.Builder optionsBuilder = AnthropicChatOptions.builder();
 
         if (userMcpClient != null) {
             optionsBuilder.maxTokens(maxTokens != null ? maxTokens : 600);
-            optionsBuilder.toolCallbacks(new AsyncMcpToolCallbackProvider(userMcpClient).getToolCallbacks());
+            optionsBuilder.toolCallbacks(new SyncMcpToolCallbackProvider(userMcpClient).getToolCallbacks());
         } else {
             log.warn("No MCP client available for user: {}", customerId);
         }

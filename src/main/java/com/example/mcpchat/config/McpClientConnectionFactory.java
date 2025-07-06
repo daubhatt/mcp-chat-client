@@ -1,14 +1,14 @@
 package com.example.mcpchat.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.modelcontextprotocol.client.McpAsyncClient;
 import io.modelcontextprotocol.client.McpClient;
-import io.modelcontextprotocol.client.transport.WebFluxSseClientTransport;
+import io.modelcontextprotocol.client.McpSyncClient;
+import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
 
+import java.net.http.HttpRequest;
 import java.time.Duration;
 
 @Component
@@ -18,18 +18,18 @@ public class McpClientConnectionFactory {
 
     private final ObjectMapper objectMapper;
 
-    public McpAsyncClient createNewConnection(String serverUrl, String jwtToken) {
+    public McpSyncClient createNewConnection(String serverUrl, String jwtToken) {
         // Logic to create and return an MCP client
         log.info("Configuring MCP client for server: {}", serverUrl);
         try {
-            WebFluxSseClientTransport transport = WebFluxSseClientTransport.builder(WebClient.builder().baseUrl(serverUrl)
-                            .defaultHeaders(httpHeaders -> httpHeaders.add("Authorization", "Bearer " + jwtToken)))
+            HttpClientSseClientTransport transport = HttpClientSseClientTransport.builder(serverUrl)
+                    .requestBuilder(HttpRequest.newBuilder().header("Authorization", "Bearer " + jwtToken))
                     .objectMapper(objectMapper)
                     .build();
-            McpAsyncClient asyncClient = McpClient.async(transport)
+            McpSyncClient asyncClient = McpClient.sync(transport)
                     .requestTimeout(Duration.ofSeconds(120))
                     .build();
-            asyncClient.initialize().subscribe();
+            asyncClient.initialize();
             return asyncClient;
 
         } catch (Exception e) {
